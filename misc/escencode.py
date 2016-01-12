@@ -72,12 +72,6 @@ def encode_echo(s, args):
 
     return '\n'.join('echo -ne %c%s%c' % (args.quote_char, line, args.quote_char) for line in encode_generic(s, args, 12))
 
-def encode_bash(s, args):
-    if args.quote_char is None:
-        args.quote_char = "'"
-
-    return '\n'.join('$%c%s%c' % (args.quote_char, line, args.quote_char) for line in encode_generic(s, args, 4))
-
 def encode_python(s, args):
     if args.quote_char is None:
         args.quote_char = '"'
@@ -89,8 +83,7 @@ def parse_args(argv):
     parser.add_argument('-x', '--no-printable', action='store_true', help="Use escapes only, no printable characters.")
     parser.add_argument('-w', '--input-width', type=int, metavar='WIDTH', help="Break input into WIDTH-sized chunks")
     parser.add_argument('-W', '--output-width', type=int, metavar='WIDTH', help="Generate chunks of no more than WIDTH bytes long")
-    parser.add_argument('--style', choices=('c', 'echo', 'bash', 'python'), default='python', help="Output style: C string, echo commands, Bash literal string or Python/JS string")
-    parser.add_argument('-b', dest='style', action='store_const', help="Bash literals output, e.g. $'...'", const='bash')
+    parser.add_argument('--style', choices=('c', 'echo', 'python'), default='python', help="Output style: C string, echo commands, or Python/JS string")
     parser.add_argument('-c', dest='style', action='store_const', help="C string output", const='c')
     parser.add_argument('-e', dest='style', action='store_const', help="echo -e output", const='echo')
     parser.add_argument('--quote-char', choices=("'", '"'), help="Quote character: single or double quote (default: double for c, single for others)")

@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 
 ESCENCODE="./escencode.py"
 DIR=escencode_test
@@ -41,10 +41,11 @@ cmp $DIR/test.bin $DIR/test.py.bin
 
 echo "[+] Testing Echo output"
 cat > $DIR/test.echo.sh <<EOF
-$($ESCENCODE --style=echo $DIR/test.bin)
+$($ESCENCODE --style=echo -W 80 $DIR/test.bin)
 EOF
 
 bash $DIR/test.echo.sh > $DIR/test.echo.bin
 cmp $DIR/test.bin $DIR/test.echo.bin
 
 
+echo '[+] All tests passed!'
