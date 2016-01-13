@@ -22,9 +22,9 @@ int main() {
     signal(SIGBUS, segv_handler);
 
     uint8_t linebuf[LINELEN];
-    uintptr_t linestart = (uintptr_t)&marker;
+    volatile uintptr_t linestart = (uintptr_t)&marker;
     linestart &= ~0xf;
-    int linepos = 0;
+    volatile int linepos = 0;
 
     if(!sigsetjmp(jmp, 0)) {
         for(;;) {
