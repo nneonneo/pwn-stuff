@@ -11,6 +11,7 @@ dialect_defaults = dict(
     line_continuation = '', # string to append at the end of non-final lines
     line_prefix = '', # string to prepend to every line
     line_suffix = '', # string to append to every line
+    per_line_quotes = False, # are quote chars required on every line?
 
     standard_escapes = make_escape_dict('abfnrtv\\'), # standard short escape characters
     hex_escape = True, # allow hex escapes?
@@ -33,13 +34,15 @@ class Dialect:
                 raise TypeError("unknown dialect key %s" % k)
             setattr(self, k, kwargs[k])
 
+# Remember, we want to avoid implicit newlines. Thus, multiline strings (!per_line_quotes)
+# are only allowed if they will not insert newlines on each line.
 default_dialect = Dialect()
 python_dialect = Dialect(quote_char="'", line_continuation='\\')
-c_dialect = Dialect(hex_continues=True, force_encode='?') # force encode ? to avoid trigraphs
+c_dialect = Dialect(hex_continues=True, line_continuation='\\', force_encode='?') # force encode ? to avoid trigraphs
 ruby_dialect = Dialect(quote_char='"', line_continuation='\\', standard_escapes=make_escape_dict('bfnrt\\#'))
-echo_dialect = Dialect(quote_char="'", line_prefix="echo -ne ", force_encode="'", oct_escape=False)
+echo_dialect = Dialect(quote_char="'", per_line_quotes=True, line_prefix="echo -ne ", force_encode="'", oct_escape=False)
 js_dialect = Dialect(quote_char="'", oct_escape=False, standard_escapes=make_escape_dict('bfnrt\\')) # JS is deprecating octal escapes
-java_dialect = Dialect(quote_char='"', line_continuation='+', hex_escape=False, standard_escapes=make_escape_dict('bfnrt\\')) # Java doesn't have hex escapes at all!
+java_dialect = Dialect(quote_char='"', per_line_quotes=True, line_continuation='+', hex_escape=False, standard_escapes=make_escape_dict('bfnrt\\')) # Java doesn't have hex escapes at all!
 
 class LineEncoder:
     def __init__(self, dialect):
@@ -78,10 +81,19 @@ def encode_file(f, dialect, input_width=None, line_width=None):
     line_width = line_width or 1<<63
     c = f.read(1)
     nextc = f.read(1)
+    first = True
 
     while 1:
-        line = [dialect.line_prefix, dialect.quote_char]
-        line_size = len(dialect.line_prefix) + len(dialect.quote_char * 2) + len(dialect.line_suffix) + len(dialect.line_continuation)
+        line = [dialect.line_prefix]
+        if first or dialect.per_line_quotes:
+            line.append(dialect.quote_char)
+        first = False
+        line_size = len(''.join(line)) + len(dialect.line_suffix)
+        if dialect.per_line_quotes:
+            line_size += len(dialect.quote_char) + len(dialect.line_continuation)
+        else:
+            line_size += max(len(dialect.quote_char), len(dialect.line_continuation))
+
         input_count = 0
         encoder = LineEncoder(dialect)
         while input_count < input_width and line_size < line_width:
@@ -96,9 +108,14 @@ def encode_file(f, dialect, input_width=None, line_width=None):
             c = nextc
             nextc = f.read(1)
             input_count += 1
-        line += [dialect.quote_char, dialect.line_suffix]
         if c:
-            line += [dialect.line_continuation]
+            if dialect.per_line_quotes:
+                line.append(dialect.quote_char)
+            line.append(dialect.line_suffix)
+            line.append(dialect.line_continuation)
+        else:
+            line.append(dialect.quote_char)
+            line.append(dialect.line_suffix)
         yield ''.join(line)
         if not c:
             break
@@ -106,10 +123,10 @@ def encode_file(f, dialect, input_width=None, line_width=None):
 def java_join(chunks):
     ''' Join chunks recursively in a binary tree style. '''
     if len(chunks) <= 3:
-        return '\n+new String()+\n'.join(chunks)
+        return '+new String()+'.join('(\n%s\n)' % c for c in chunks)
 
     mid = len(chunks)//2
-    return '(%s\n)+new String()+(\n%s)' % (java_join(chunks[:mid]), java_join(chunks[mid:]))
+    return '(%s)+new String()+(%s)' % (java_join(chunks[:mid]), java_join(chunks[mid:]))
 
 def encode_java(s, input_width=None, line_width=None):
     ''' Java strings are limited to about 64K, which means that we have to split the input
@@ -125,7 +142,7 @@ def encode_java(s, input_width=None, line_width=None):
     for i in xrange(0, len(s), chunksize):
         chunk = cStringIO.StringIO(s[i:i+chunksize])
         chunk_str = '\n'.join(encode_file(chunk, java_dialect, input_width, line_width))
-        lines.append('(%s)' % chunk_str)
+        lines.append(chunk_str)
     return java_join(lines)
 
 def parse_args(argv):
