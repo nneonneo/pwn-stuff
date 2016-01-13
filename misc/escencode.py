@@ -2,93 +2,111 @@
 import sys
 import argparse
 
-standard_escapes = {
-    '\n': '\\n',
-    '\r': '\\r', 
-    '\t': '\\t',
-}
+def make_escape_dict(s):
+    known = {'a':'\a', 'b':'\b', 'f':'\f', 'n':'\n', 'r':'\r', 't':'\t', 'v':'\v'}
+    return {known.get(c, c): '\\'+c for c in s}
 
-def hexescape(ch):
-    return '\\x%02x' % ch
+dialect_defaults = dict(
+    quote_char = '"', # quote character
+    line_continuation = '', # string to append at the end of non-final lines
+    line_prefix = '', # string to prepend to every line
+    line_suffix = '', # string to append to every line
 
-def encode_char(c, args, hexok=True):
-    ch = ord(c)
-    if args.no_printable:
-        return hexescape(ch)
+    standard_escapes = make_escape_dict('abfnrtv\\'), # standard short escape characters
+    hex_escape = True, # allow hex escapes?
+    oct_escape = True, # allow octal escapes (backslash plus 1-3 octal digits)?
+    hex_continues = False, # are hex escapes unbounded in length?
+    force_encode = '', # characters that _must_ be encoded no matter what
+)
 
-    if not hexok and c in '0123456789abcdefABCDEF':
-        return hexescape(ch)
+class Dialect:
+    def __init__(self, base=None, **kwargs):
+        if base is None:
+            for k in dialect_defaults:
+                setattr(self, k, dialect_defaults[k])
+        else:
+            for k in dialect_defaults:
+                setattr(self, k, getattr(base, k))
 
-    if args.style in ('bash', 'echo') and c in '\'"\\$':
-        # Hex-escape some special characters to be safe.
-        return hexescape(ch)
+        for k in kwargs:
+            if k not in dialect_defaults:
+                raise TypeError("unknown dialect key %s" % k)
+            setattr(self, k, kwargs[k])
 
-    if args.quote_char == c:
-        return "\\" + c
-    if c == '\\':
-        return '\\\\'
+default_dialect = Dialect()
+python_dialect = Dialect(quote_char="'", line_continuation='\\')
+c_dialect = Dialect(hex_continues=True)
+ruby_dialect = Dialect(quote_char='"', line_continuation='\\', standard_escapes=make_escape_dict('bfnrt\\#'))
+echo_dialect = Dialect(quote_char="'", line_prefix="echo -ne ", force_encode="'", oct_escape=False)
+js_dialect = Dialect(quote_char="'", oct_escape=False, standard_escapes=make_escape_dict('bfnrt\\')) # JS is deprecating octal escapes
+java_dialect = Dialect(quote_char='"', line_continuation='+', hex_escape=False, standard_escapes=make_escape_dict('bfnrt\\')) # Java doesn't have hex escapes at all!
 
-    if c in standard_escapes:
-        return standard_escapes[c]
+class LineEncoder:
+    def __init__(self, dialect):
+        self.dialect = dialect
+        self.prevhex = False # was the previous character encoded as a continuable hex escape? (Only if hex_continues is True)
 
-    if 32 <= ch <= 126:
-        return c
-    else:
-        return hexescape(ch)
+    def encode(self, c, nextc):
+        if c in self.dialect.standard_escapes:
+            self.prevhex = False
+            return self.dialect.standard_escapes[c]
+        if '\x20' <= c <= '\x7e' and c not in self.dialect.force_encode:
+            if c == self.dialect.quote_char:
+                self.prevhex = False
+                return '\\' + c
+            if not self.prevhex or c not in '0123456789abcdefABCDEF':
+                self.prevhex = False
+                return c
 
-def encode_generic(s, args, width_overhead):
-    k = args.input_width
-    if k is None:
-        k = len(s)
-    lines = []
-    for i in xrange(0, len(s), k):
-        inpos = i
-        inend = i+k
-        while inpos < inend:
-            prevhex = False
-            line = []
-            linesz = 0
-            while inpos < inend:
-                nextout = encode_char(s[inpos], args, not (args.style == 'c' and prevhex))
-                if args.output_width is not None and\
-                  (line and len(nextout) + linesz > args.output_width - width_overhead):
-                    break
-                inpos += 1
-                line.append(nextout)
-                linesz += len(nextout)
-                prevhex = nextout.startswith('\\x')
-            lines.append(''.join(line))
-    return lines
+        # going to encode the character
+        if self.dialect.oct_escape:
+            # octal escapes are shorter (or equal length) to hex escapes
+            self.prevhex = False
+            if nextc in '01234567':
+                return '\\%03o' % ord(c)
+            else:
+                return '\\%o' % ord(c)
+        elif self.dialect.hex_escape:
+            self.prevhex = self.dialect.hex_continues
+            return '\\x%02x' % ord(c)
+        else:
+            raise Exception("Cannot encode character %r" % c)
 
-def encode_c(s, args):
-    if args.quote_char is None:
-        args.quote_char = '"'
+def encode_file(f, dialect, input_width=None, line_width=None):
+    input_width = input_width or 1<<63
+    line_width = line_width or 1<<63
+    c = f.read(1)
+    nextc = f.read(1)
 
-    return '\n'.join('%c%s%c' % (args.quote_char, line, args.quote_char) for line in encode_generic(s, args, 3))
+    while 1:
+        line = [dialect.line_prefix, dialect.quote_char]
+        line_size = len(dialect.line_prefix) + len(dialect.quote_char * 2) + len(dialect.line_suffix) + len(dialect.line_continuation)
+        input_count = 0
+        encoder = LineEncoder(dialect)
+        while input_count < input_width and line_size < line_width:
+            if not c:
+                break
+            chunk = encoder.encode(c, nextc)
+            if len(chunk) + line_size > line_width:
+                break
 
-def encode_echo(s, args):
-    if args.quote_char is None:
-        args.quote_char = "'"
-
-    return '\n'.join('echo -ne %c%s%c' % (args.quote_char, line, args.quote_char) for line in encode_generic(s, args, 12))
-
-def encode_python(s, args):
-    if args.quote_char is None:
-        args.quote_char = '"'
-
-    return '\\\n'.join('%c%s%c' % (args.quote_char, line, args.quote_char) for line in encode_generic(s, args, 4))
+            line.append(chunk)
+            line_size += len(chunk)
+            c = nextc
+            nextc = f.read(1)
+            input_count += 1
+        line += [dialect.quote_char, dialect.line_suffix]
+        if c:
+            line += [dialect.line_continuation]
+        yield ''.join(line)
+        if not c:
+            break
 
 def parse_args(argv):
     parser = argparse.ArgumentParser('Encode a file as a backslash-escaped string.')
-    parser.add_argument('-x', '--no-printable', action='store_true', help="Use escapes only, no printable characters.")
-    parser.add_argument('-w', '--input-width', type=int, metavar='WIDTH', help="Break input into WIDTH-sized chunks")
-    parser.add_argument('-W', '--output-width', type=int, metavar='WIDTH', help="Generate chunks of no more than WIDTH bytes long")
-    parser.add_argument('--style', choices=('c', 'echo', 'python'), default='python', help="Output style: C string, echo commands, or Python/JS string")
-    parser.add_argument('-c', dest='style', action='store_const', help="C string output", const='c')
-    parser.add_argument('-e', dest='style', action='store_const', help="echo -e output", const='echo')
-    parser.add_argument('--quote-char', choices=("'", '"'), help="Quote character: single or double quote (default: double for c, single for others)")
-    parser.add_argument('-\'', dest='quote_char', action='store_const', help="Use single quotes", const="'")
-    parser.add_argument('-"', dest='quote_char', action='store_const', help="Use double quotes", const='"')
+    parser.add_argument('-w', '--input-width', type=int, metavar='WIDTH', help="Encode no more than WIDTH bytes in each line")
+    parser.add_argument('-W', '--output-width', type=int, metavar='WIDTH', help="Limit output lines to no more than WIDTH characters")
+    parser.add_argument('--style', choices=('c', 'echo', 'python', 'js', 'java', 'ruby'), default='python', help="Output style/language")
     parser.add_argument('file', nargs='?', help="Input file; if not specified, read from stdin.")
     return parser.parse_args(argv)
 
@@ -100,7 +118,9 @@ def main(argv):
     else:
         f = sys.stdin
 
-    sys.stdout.write(globals()['encode_' + args.style](f.read(), args))
+    dialect = Dialect(globals()[args.style + '_dialect'])
+    for line in encode_file(f, dialect, args.input_width, args.output_width):
+        print line
 
 if __name__ == '__main__':
     import sys
