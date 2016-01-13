@@ -51,6 +51,7 @@ class LineEncoder:
             self.prevhex = False
             return self.dialect.standard_escapes[c]
         if '\x20' <= c <= '\x7e' and c not in self.dialect.force_encode:
+            # printable character
             if c == self.dialect.quote_char:
                 self.prevhex = False
                 return '\\' + c
@@ -62,7 +63,7 @@ class LineEncoder:
         if self.dialect.oct_escape:
             # octal escapes are shorter (or equal length) to hex escapes
             self.prevhex = False
-            if nextc in '01234567':
+            if nextc and nextc in '01234567':
                 return '\\%03o' % ord(c)
             else:
                 return '\\%o' % ord(c)
