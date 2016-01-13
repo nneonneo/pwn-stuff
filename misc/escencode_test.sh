@@ -8,8 +8,6 @@ cd $DIR
 
 echo "[+] Making test files"
 python -c 'import sys; sys.stdout.write("".join(chr(a)+chr(b) for a in xrange(256) for b in xrange(256)))' > test.bin
-# Smaller file for Java, since it can't handle big string literals...
-python -c 'import sys; sys.stdout.write("".join(chr(a)+chr(b) for a in xrange(256) for b in xrange(a%7, 256, 7)))' > test_small.bin
 
 
 echo "[+] Testing C output"
@@ -56,7 +54,7 @@ cat > test.java <<EOF
 public class test {
     public static final void main(String[] args) {
         try {
-            System.out.write( ($($ESCENCODE --style=java -W 80 test_small.bin)).getBytes("ISO-8859-1"));
+            System.out.write( ($($ESCENCODE --style=java -W 80 test.bin)).getBytes("ISO-8859-1"));
         } catch(Exception e) {
             e.printStackTrace();
             System.exit(1);
@@ -67,7 +65,7 @@ EOF
 
 javac test.java
 java test > test.java.bin
-cmp test_small.bin test.java.bin
+cmp test.bin test.java.bin
 
 
 echo "[+] Testing Echo output"

@@ -35,7 +35,7 @@ class Dialect:
 
 default_dialect = Dialect()
 python_dialect = Dialect(quote_char="'", line_continuation='\\')
-c_dialect = Dialect(hex_continues=True)
+c_dialect = Dialect(hex_continues=True, force_encode='?') # force encode ? to avoid trigraphs
 ruby_dialect = Dialect(quote_char='"', line_continuation='\\', standard_escapes=make_escape_dict('bfnrt\\#'))
 echo_dialect = Dialect(quote_char="'", line_prefix="echo -ne ", force_encode="'", oct_escape=False)
 js_dialect = Dialect(quote_char="'", oct_escape=False, standard_escapes=make_escape_dict('bfnrt\\')) # JS is deprecating octal escapes
@@ -103,6 +103,31 @@ def encode_file(f, dialect, input_width=None, line_width=None):
         if not c:
             break
 
+def java_join(chunks):
+    ''' Join chunks recursively in a binary tree style. '''
+    if len(chunks) <= 3:
+        return '\n+new String()+\n'.join(chunks)
+
+    mid = len(chunks)//2
+    return '(%s\n)+new String()+(\n%s)' % (java_join(chunks[:mid]), java_join(chunks[mid:]))
+
+def encode_java(s, input_width=None, line_width=None):
+    ''' Java strings are limited to about 64K, which means that we have to split the input
+    into multiple large chunks..
+    Java's compiler will stack overflow if we do too many `+` operations in a row, so we
+    have to join the chunks in a binary-tree style to avoid nesting too deeply.
+    tl;dr: Java sucks. '''
+    import cStringIO
+
+    chunksize = 32767 # UTF-8 representation may make the string up to 65534 bytes in size
+
+    lines = []
+    for i in xrange(0, len(s), chunksize):
+        chunk = cStringIO.StringIO(s[i:i+chunksize])
+        chunk_str = '\n'.join(encode_file(chunk, java_dialect, input_width, line_width))
+        lines.append('(%s)' % chunk_str)
+    return java_join(lines)
+
 def parse_args(argv):
     parser = argparse.ArgumentParser('Encode a file as a backslash-escaped string.')
     parser.add_argument('-w', '--input-width', type=int, metavar='WIDTH', help="Encode no more than WIDTH bytes in each line")
@@ -118,6 +143,11 @@ def main(argv):
         f = open(args.file, 'rb')
     else:
         f = sys.stdin
+
+    if args.style == 'java':
+        # special-case java due to Java language/compiler limitations
+        print encode_java(f.read(), args.input_width, args.output_width)
+        return
 
     dialect = Dialect(globals()[args.style + '_dialect'])
     for line in encode_file(f, dialect, args.input_width, args.output_width):
