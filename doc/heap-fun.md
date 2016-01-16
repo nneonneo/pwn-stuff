@@ -4,6 +4,8 @@ This post will help you understand memory allocators in more depth, enabling you
 
 Details on the glibc allocator are taken from glibc's [malloc/malloc.c](http://code.metager.de/source/xref/gnu/glibc/malloc/malloc.c). This is a fairly complex file to read, and it is hoped that this document will result in fewer trips to read that source code :)
 
+You can grab a local copy of `glibc` using `git clone git://sourceware.org/git/glibc.git`.
+
 Throughout, we'll let `SIZE_T` denote `sizeof(size_t)`: 4 on x86, and 8 on x64.
 
 ## malloc basics
