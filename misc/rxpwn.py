@@ -1,10 +1,35 @@
 ''' Robert Xiao (@nneonneo)'s pwning library. Very basic. '''
+from __future__ import print_function
+
 from socket import *
 from struct import *
 import sys
 import re
 
-re_pattern_type = type(re.compile(''))
+import string
+_printable_bytes = {ord(c.encode()) for c in string.printable if (not c.isspace() or c in ' \n')}
+
+_PY3 = sys.version_info >= (3,)
+
+def _stringize(x):
+    try:
+        return str(x)
+    except Exception:
+        return repr(x)
+
+def _byteize(x):
+    if isinstance(x, (bytes, bytearray)):
+        return bytes(x)
+    return str(x).encode('latin1')
+
+if _PY3:
+    _str_input = input
+    _int_types = (int,)
+else:
+    _str_input = raw_input
+    _int_types = (int, long)
+
+_re_pattern_type = type(re.compile(b''))
 
 ## Socket stuff
 class Socket:
@@ -25,14 +50,13 @@ class Socket:
         self.escape = Socket.escape
 
     def _print_fmt(self, x):
-        ''' Write a string to the terminal, escaping non-printable characters. '''
-        import string
-        for c in x:
-            if not self.escape or (c in string.printable and (c in ' \n' or not c.isspace())):
-                sys.stdout.write(c)
+        ''' Write a bytestring to the terminal, escaping non-printable characters. '''
+        for c in bytearray(x):
+            if not self.escape or c in _printable_bytes:
+                sys.stdout.write(chr(c))
             else:
                 # underline this text
-                sys.stdout.write('\x1b[4m\\x%02x\x1b[24m' % ord(c))
+                sys.stdout.write('\x1b[4m\\x%02x\x1b[24m' % c)
 
     def rd(self, *suffixes, **kwargs):
         ''' Read until a particular set of criteria come true.
@@ -54,29 +78,29 @@ class Socket:
             if echo:
                 self._print_fmt(x)
                 sys.stdout.flush()
-            out.append(x)
+            out += x
 
             for suffix in suffixes:
-                if isinstance(suffix, (int, long)):
+                if isinstance(suffix, _int_types):
                     if len(out) == suffix:
                         break
-                elif isinstance(suffix, (str,)):
+                elif isinstance(suffix, (bytes, bytearray)):
                     if out.endswith(suffix):
                         break
-                elif isinstance(suffix, re_pattern_type):
+                elif isinstance(suffix, _re_pattern_type):
                     if suffix.search(out):
                         break
                 else:
-                    raise ValueError("can't understand suffix %s" % suffix)
+                    raise ValueError("can't understand suffix %r" % suffix)
             else:
                 continue
             break
-        return str(out)
+        return bytes(out)
 
     def wr(self, s, **kwargs):
         ''' Write something to the socket. No newline is added. '''
         echo = kwargs.get('echo', self.echo)
-        s = str(s)
+        s = _byteize(s)
         self.sock.send(s)
         if echo:
             # colorize sent data green
@@ -87,14 +111,14 @@ class Socket:
 
     def pr(self, *bits, **kwargs):
         ''' Print something to the socket. Like Python 3's print() function. Adds a newline. '''
-        bits = map(str, bits)
-        self.wr(' '.join(bits) + '\n', **kwargs)
+        bits = map(_byteize, bits)
+        self.wr(b' '.join(bits) + b'\n', **kwargs)
 
     def interactive(self):
         ''' Go interactive, allowing the terminal user to interact directly with the service. Like nc. '''
         import select
 
-        print "\x1b[31m*** Entering interactive mode ***\x1b[39m"
+        print("\x1b[31m*** Entering interactive mode ***\x1b[39m")
         stdin_fd = sys.stdin.fileno()
         sock_fd = self.sock.fileno()
         while 1:
@@ -102,7 +126,7 @@ class Socket:
             if sock_fd in r:
                 res = self.sock.recv(4096)
                 if not res:
-                    print "\x1b[31m*** Connection closed by remote host ***\x1b[39m"
+                    print("\x1b[31m*** Connection closed by remote host ***\x1b[39m")
                     break
                 self._print_fmt(res)
                 sys.stdout.flush()
@@ -110,7 +134,7 @@ class Socket:
                 res = sys.stdin.readline()
                 if not res:
                     raise EOFError()
-                self.sock.send(res)
+                self.sock.send(_byteize(res))
 
 def rd(*args, **kwargs):
     return Socket._last_socket.rd(*args, **kwargs)
@@ -126,13 +150,13 @@ def interactive(*args, **kwargs):
 
 ## Misc
 def pause():
-    raw_input("\x1b[31mPausing...\x1b[39m")
+    _str_input("\x1b[31mPausing...\x1b[39m")
 
 def log(*args):
-    print '\x1b[33m' + ' '.join(map(str, args)) + '\x1b[39m'
+    print('\x1b[33m' + ' '.join(map(str, args)) + '\x1b[39m')
 
 def err(*args):
-    print '\x1b[31m' + ' '.join(map(str, args)) + '\x1b[39m'
+    print('\x1b[31m' + ' '.join(map(str, args)) + '\x1b[39m')
 
 ## Pack/unpack
 def _genpack(name, endian, ch):
