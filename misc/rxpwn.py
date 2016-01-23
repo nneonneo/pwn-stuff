@@ -11,12 +11,6 @@ _printable_bytes = {ord(c.encode()) for c in string.printable if (not c.isspace(
 
 _PY3 = sys.version_info >= (3,)
 
-def _stringize(x):
-    try:
-        return str(x)
-    except Exception:
-        return repr(x)
-
 def _byteize(x):
     if isinstance(x, (bytes, bytearray)):
         return bytes(x)
@@ -57,6 +51,14 @@ class Socket:
             else:
                 # underline this text
                 sys.stdout.write('\x1b[4m\\x%02x\x1b[24m' % c)
+
+    def close(self):
+        try:
+            self.sock.shutdown(SHUT_RDWR)
+        except Exception:
+            pass
+
+        self.sock.close()
 
     def rd(self, *suffixes, **kwargs):
         ''' Read until a particular set of criteria come true.
@@ -152,11 +154,17 @@ def interactive(*args, **kwargs):
 def pause():
     _str_input("\x1b[31mPausing...\x1b[39m")
 
-def log(*args):
-    print('\x1b[33m' + ' '.join(map(str, args)) + '\x1b[39m')
+def log(*args, **kwargs):
+    print('\x1b[33m', end='')
+    print('[+]', end=' ')
+    print(*args, end='', **kwargs)
+    print('\x1b[39m')
 
-def err(*args):
-    print('\x1b[31m' + ' '.join(map(str, args)) + '\x1b[39m')
+def err(*args, **kwargs):
+    print('\x1b[31m', end='')
+    print('[-]', end=' ')
+    print(*args, end='', **kwargs)
+    print('\x1b[39m')
 
 ## Pack/unpack
 def _genpack(name, endian, ch):
@@ -170,7 +178,7 @@ def _genunpack(name, endian, ch):
     def unpacker(data):
         if len(data) % sz != 0:
             raise ValueError("buffer size is not a multiple of %d" % sz)
-        res = unpack(endian + str(len(data)/sz) + ch, data)
+        res = unpack(endian + str(len(data)//sz) + ch, data)
         if len(res) == 1:
             # fix annoying behaviour of unpack
             return res[0]
