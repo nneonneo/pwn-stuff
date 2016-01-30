@@ -67,6 +67,10 @@ def parse_ida_c(lines, ln=0, parindent=-2):
             out.append(CNode('\n'.join(curline), children))
             curline = []
             continue
+        elif ni == 0 and re.match(r'LABEL\w+:', lines[ln]):
+            print >> sys.stderr, "Warning: label %s found at line %d" % (lines[ln].strip(), ln)
+            out.append(CNode('\n'.join(curline)))
+            curline = [' '*(parindent + 2) + lines[ln]]
         elif ni < parindent:
             print >> sys.stderr, "Warning: multiple unindent transition %d->%d at line %d" % (parindent, ni, ln)
             break
@@ -82,7 +86,7 @@ def parse_ida_c(lines, ln=0, parindent=-2):
 import re
 re_num = r'-?\d\w*'
 def mklabel(n):
-    n = int(n, 0)
+    n = int(n.rstrip('L').rstrip('U'), 0)
     if n >= 1<<31:
         n -= 1<<32
     return '_L%s' % (str(n).replace('-', 'n'))
@@ -120,19 +124,29 @@ class CtrlFlowUnflattener:
                     top[i:i+2] = self.unflatten_loop(top[i].children) + [CNode(mklabel(m.group(1)) + ':')]
                     self.bbs[mklabel(m.group(1))] = None
                     break
-            else:
-                m = re.match(while_re, top[i].line)
-                if m:
-                    top[i:i+1] = self.unflatten_loop(top[i].children) + [CNode(mklabel(m.group(1)) + ':')]
-                    self.bbs[mklabel(m.group(1))] = None
-                    break
+
+            m = re.match(while_re, top[i].line)
+            if m:
+                top[i:i+1] = self.unflatten_loop(top[i].children) + [CNode(mklabel(m.group(1)) + ':')]
+                self.bbs[mklabel(m.group(1))] = None
+                break
+
+            m = re.match(r' *while \( 1 \)', top[i].line)
+            if m:
+                # infinite loop toplevel
+                top[i:i+1] = self.unflatten_loop(top[i].children)
+                break
+
         else:
             raise ValueError("No main loop found!")
 
         # Fix basic blocks
         for label in self.bbs:
             if self.bbs[label] is not None:
-                self.convert_bb(self.bbs[label], toplevel=True)
+                self.convert_bb(self.bbs[label])
+
+        # Insert new label variables
+        func_node.children[:0] = [CNode('void *%s_lbl;' % i) for i in self.lbl_vars]
 
         return func_node
 
@@ -181,10 +195,8 @@ class CtrlFlowUnflattener:
                 out.append(n)
         return out
 
-    def convert_bb(self, bb, toplevel=False):
+    def convert_bb(self, bb):
         out = []
-        if toplevel:
-            self.lbl_vars = set()
         for n in bb.children:
             m = re.match(' *(\w+) = (%s)' % re_num, n.line)
             if m and mklabel(m.group(2)) in self.bbs:
@@ -205,11 +217,6 @@ class CtrlFlowUnflattener:
 
             self.convert_bb(n)
             out.append(n)
-        if toplevel and self.lbl_vars:
-            # Insert new label variables
-            out[:0] = [CNode('void *%s_lbl;' % i) for i in self.lbl_vars]
-            self.lbl_vars = set()
-
         bb.children = out
             
 def unflatten_func_source(func_node, var):
