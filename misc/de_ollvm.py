@@ -68,13 +68,14 @@ def parse_ida_c(lines, ln=0, parindent=-2):
             curline = []
             continue
         elif ni == 0 and re.match(r'LABEL\w+:', lines[ln]):
-            print >> sys.stderr, "Warning: label %s found at line %d" % (lines[ln].strip(), ln)
+            # label
             out.append(CNode('\n'.join(curline)))
             curline = [' '*(parindent + 2) + lines[ln]]
         elif ni < parindent:
-            print >> sys.stderr, "Warning: multiple unindent transition %d->%d at line %d" % (parindent, ni, ln)
+            # multiple unindent (e.g. after an unbraced block)
             break
         else:
+            # this is usually a wrapped line
             print >> sys.stderr, "Warning: unknown indent transition %d->%d at line %d" % (parindent, ni, ln)
             curline.append(lines[ln])
         ln += 1
@@ -101,15 +102,45 @@ class CtrlFlowUnflattener:
         '''
         self.var = var
         self.bbs = {} # basic blocks
+        self.bb_refs = collections.defaultdict(list)
         self.lbl_vars = set()
+
+    def _mk_tree(self, start):
+        visited = {start}
+        def recurse(node):
+            out = []
+            maxht = 0
+            for child in self.bb_refs[node]:
+                if child in visited:
+                    continue
+                visited.add(child)
+                n, nodes, ht = recurse(child)
+                if ht > maxht:
+                    maxht = ht
+                out.append((n, nodes, ht))
+            return (node, out, maxht+1)
+        return recurse(start)
+
+    def _tree_sort(self, tree, lbls):
+        out = []
+        def recurse((node, children, ht)):
+            children.sort(key=lambda x: x[2]) # sort by height
+            if node in lbls:
+                out.append(node)
+            for c in children:
+                recurse(c)
+        recurse(tree)
+        return out
 
     def unflatten(self, func_node):
         # Find initial block
         top = func_node.children
+        init_label = None
         for i in xrange(len(top)):
             m = re.match(r' *\b%s\b = (%s);' % (self.var, re_num), top[i].line)
             if m:
                 top[i] = CNode('goto %s;' % mklabel(m.group(1)))
+                init_label = mklabel(m.group(1))
                 break
         else:
             raise ValueError("No starting block found!")
@@ -143,10 +174,34 @@ class CtrlFlowUnflattener:
         # Fix basic blocks
         for label in self.bbs:
             if self.bbs[label] is not None:
-                self.convert_bb(self.bbs[label])
+                self.convert_bb(self.bbs[label], label)
 
         # Insert new label variables
-        func_node.children[:0] = [CNode('void *%s_lbl;' % i) for i in self.lbl_vars]
+        top[:0] = [CNode('void *%s_lbl;' % i) for i in self.lbl_vars]
+
+        # Toposort the basic blocks
+        newtop = []
+        all_bbs = {v:k for k,v in self.bbs.iteritems()}
+        top_bbs = set()
+        bb_start_index = None
+        for i in xrange(len(top)):
+            if top[i] in all_bbs:
+                if bb_start_index is None:
+                    bb_start_index = i
+                top_bbs.add(all_bbs[top[i]])
+            else:
+                newtop.append(top[i])
+
+        tree = self._mk_tree(init_label)
+        new_bbs = self._tree_sort(tree, top_bbs)
+        orphan = list(top_bbs - set(new_bbs))
+        if orphan:
+            print >> sys.stderr, "Warning: orphan blocks: %s" % orphan
+        non_tl = list(set(self.bbs) - top_bbs)
+        if non_tl:
+            print >> sys.stderr, "Warning: non-top-level blocks: %s" % non_tl
+        newtop[bb_start_index:bb_start_index] = [self.bbs[lbl] for lbl in new_bbs + orphan]
+        func_node.children = newtop
 
         return func_node
 
@@ -195,7 +250,7 @@ class CtrlFlowUnflattener:
                 out.append(n)
         return out
 
-    def convert_bb(self, bb):
+    def convert_bb(self, bb, lbl):
         out = []
         for n in bb.children:
             m = re.match(' *(\w+) = (%s)' % re_num, n.line)
@@ -207,6 +262,7 @@ class CtrlFlowUnflattener:
                     # computed goto
                     self.lbl_vars.add(m.group(1))
                     out.append(CNode('%s_lbl = &&%s;' % (m.group(1), mklabel(m.group(2)))))
+                self.bb_refs[lbl].append(mklabel(m.group(2)))
                 continue
 
             m = re.match(' *%s = (\w+)' % self.var, n.line)
@@ -215,7 +271,7 @@ class CtrlFlowUnflattener:
                 out.append(CNode('goto *%s_lbl;' % m.group(1)))
                 continue
 
-            self.convert_bb(n)
+            self.convert_bb(n, lbl)
             out.append(n)
         bb.children = out
             
