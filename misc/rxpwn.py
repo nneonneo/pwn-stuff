@@ -1,4 +1,35 @@
-''' Robert Xiao (@nneonneo)'s pwning library. Very basic. '''
+''' Robert Xiao (@nneonneo)'s pwning library.
+
+This library focuses on brevity and easy-to-remember shortcuts.
+The function names are deliberately very short to make them easy
+to type and so they don't take up too much of your script - you'll
+probably use these a lot.
+
+Socket: create a socket to a remote host
+- All methods of Socket are also available as globals which operate on the last opened socket
+- rd: read a set number of bytes, or read until a suffix is found, or until the input matches a regex
+- pr: print stuff to the socket (adds a newline, works just like print())
+- wr: write something to the socket (single item, no newline)
+- interactive: enter an interactive loop like nc or telnet (Ctrl+D to quit the interactive loop and resume your script)
+
+Logging methods
+- pause(): pause script execution (useful to give you time to attach a debugger, for example)
+- log: print a log message, like print() but with color
+- err: print an error message, like print() but with color
+
+Binary conversion:
+- uX: unpack using format code X in little-endian format
+    X is in 'bBhHiIqQfd' (usual struct codes: byte, short, int, long long, float, double and their unsigned variants)
+    Pass in a string of unit length (e.g. 8 bytes for Q) and get a single value out.
+    Pass in a longer string and get a list of values (e.g. 16 bytes to get two longs out)
+    (Yes, this is slightly inconsistent behaviour, but it's really convenient.)
+- pX: pack using format code X in little-endian
+    You can pass in multiple arguments and their packed values will just be concatenated. (e.g pQ(1, 2) to get a 16-byte string)
+- ulX, plX: synonyms for uX, pX (l = little endian)
+- unX, pnX: like uX, pX but use host endian
+- ubX, pbX: like uX, pX but use big-endian
+'''
+
 from __future__ import print_function
 
 from socket import *
