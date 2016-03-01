@@ -136,7 +136,8 @@ class Socket:
             if stdin_fd in r:
                 res = sys.stdin.readline()
                 if not res:
-                    raise EOFError()
+                    print("\x1b[31m*** Exiting interactive mode ***\x1b[39m")
+                    break
                 self.sock.send(_byteize(res))
 
 def rd(*args, **kwargs):
