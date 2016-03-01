@@ -189,7 +189,7 @@ def _genunpack(name, endian, ch):
     return unpacker
 
 for ch in 'bBhHiIqQfd':
-    for endian, endianch in [('',''), ('<','l'), ('>','b')]:
+    for endian, endianch in [('<',''), ('<','l'), ('>','b'), ('@','n')]:
         name = endianch + ch
         globals()['p' + name] = _genpack('p' + name, endian, ch)
         globals()['u' + name] = _genunpack('u' + name, endian, ch)
