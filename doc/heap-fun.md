@@ -87,7 +87,7 @@ The `tiny` and `small` thresholds are adjustable. The defaults are:
 
 Technically, there is another type of chunk, the `mmap` chunk. These chunks are not in the heap at all, and are always allocated (they are `munmap`'d when freed). Because they aren't in the heap, there usually isn't anything bordering an `mmap` chunk and so they don't tend to be very useful for exploitation. The cutoff for `mmap` chunks starts at 128KB, but increases if `mmap` chunks are freed (up to a max of 32 MB on 32-bit or 64 MB on 64-bit).
 
-`glibc` also uses the bottom two bits of the `size` value as flag bits (these two bits of the actual size are always zero due to the alignment requirement). Bit #1 indicates that the chunk is `mmap`ed (and thus not even on the heap at all). Bit #0 is *unset* if the previous chunk is a small large free chunk.
+`glibc` also uses the bottom two bits of the `size` value as flag bits (these two bits of the actual size are always zero due to the alignment requirement). Bit #1 indicates that the chunk is `mmap`ed (and thus not even on the heap at all). Bit #0 is *unset* if the previous chunk is a small or large free chunk.
 
 > Side-note: Differences from `malloc.c`
 > 
