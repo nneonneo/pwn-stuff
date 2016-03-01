@@ -5,6 +5,7 @@ from socket import *
 from struct import *
 import sys
 import re
+import os
 
 import string
 _printable_bytes = {ord(c.encode()) for c in string.printable if (not c.isspace() or c in ' \n')}
@@ -30,7 +31,7 @@ class Socket:
     ''' Basic socket class for interacting with remote services. '''
 
     echo = True # global echo option, can be set to affect all future sockets
-    escape = True # global escape option
+    escape = os.isatty(1) # global escape option
     _last_socket = None # most recent socket, for global rd/pr/wr functions
 
     # echo => whether rd/pr/wr echo back what they write
