@@ -314,11 +314,13 @@ class TestRXPwnMisc(OutputCapturingTestCase):
 class TestRXPwnPackUnpack(unittest.TestCase):
     def test_pack(self):
         self.assertEqual(rxpwn.plQ(0x4142434445464748), b'HGFEDCBA')
+        self.assertEqual(rxpwn.pQ(0x4142434445464748), b'HGFEDCBA')
         self.assertEqual(rxpwn.pbQ(0x4142434445464748), b'ABCDEFGH')
 
     def test_unpack(self):
         self.assertEqual(rxpwn.ubQ(b'ABCDEFGH'), 0x4142434445464748)
         self.assertEqual(rxpwn.ulQ(b'HGFEDCBA'), 0x4142434445464748)
+        self.assertEqual(rxpwn.uQ(b'HGFEDCBA'), 0x4142434445464748)
         self.assertEqual(rxpwn.ubI(b'ABCDEFGH'), (0x41424344, 0x45464748))
 
 if __name__ == '__main__':

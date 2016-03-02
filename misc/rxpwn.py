@@ -32,11 +32,12 @@ Binary conversion:
 
 from __future__ import print_function
 
-from socket import *
-from struct import *
+from struct import calcsize, pack, unpack
+import socket
 import sys
 import re
 import os
+from contextlib import contextmanager
 
 import string
 _printable_bytes = {ord(c.encode()) for c in string.printable if (not c.isspace() or c in ' \n')}
@@ -57,6 +58,25 @@ else:
 
 _re_pattern_type = type(re.compile(b''))
 
+_ANSI_COLOR_RED = '\x1b[31m'
+_ANSI_COLOR_GREEN = '\x1b[32m'
+_ANSI_COLOR_YELLOW = '\x1b[33m'
+_ANSI_COLOR_DEFAULT = '\x1b[39m'
+_ANSI_UNDERLINE_ON = '\x1b[4m'
+_ANSI_UNDERLINE_OFF = '\x1b[24m'
+
+@contextmanager
+def _ansi_color(color):
+    sys.stdout.write(color)
+    yield
+    sys.stdout.write(_ANSI_COLOR_DEFAULT)
+
+@contextmanager
+def _ansi_underline():
+    sys.stdout.write(_ANSI_UNDERLINE_ON)
+    yield
+    sys.stdout.write(_ANSI_UNDERLINE_OFF)
+
 ## Socket stuff
 class Socket:
     ''' Basic socket class for interacting with remote services. '''
@@ -70,7 +90,7 @@ class Socket:
     def __init__(self, target):
         ''' Create a new socket connected to the target. '''
         Socket._last_socket = self
-        self.sock = create_connection(target)
+        self.sock = socket.create_connection(target)
         self.echo = Socket.echo
         self.escape = Socket.escape
 
@@ -81,11 +101,12 @@ class Socket:
                 sys.stdout.write(chr(c))
             else:
                 # underline this text
-                sys.stdout.write('\x1b[4m\\x%02x\x1b[24m' % c)
+                with _ansi_underline():
+                    sys.stdout.write('\\x%02x' % c)
 
     def close(self):
         try:
-            self.sock.shutdown(SHUT_RDWR)
+            self.sock.shutdown(socket.SHUT_RDWR)
         except Exception:
             pass
 
@@ -137,9 +158,8 @@ class Socket:
         self.sock.send(s)
         if echo:
             # colorize sent data green
-            sys.stdout.write('\x1b[32m')
-            self._print_fmt(s)
-            sys.stdout.write('\x1b[39m')
+            with _ansi_color(_ANSI_COLOR_GREEN):
+                self._print_fmt(s)
             sys.stdout.flush()
 
     def pr(self, *bits, **kwargs):
@@ -151,7 +171,8 @@ class Socket:
         ''' Go interactive, allowing the terminal user to interact directly with the service. Like nc. '''
         import select
 
-        print("\x1b[31m*** Entering interactive mode ***\x1b[39m")
+        with _ansi_color(_ANSI_COLOR_RED):
+            print("*** Entering interactive mode ***")
         stdin_fd = sys.stdin.fileno()
         sock_fd = self.sock.fileno()
         while 1:
@@ -159,14 +180,16 @@ class Socket:
             if sock_fd in r:
                 res = self.sock.recv(4096)
                 if not res:
-                    print("\x1b[31m*** Connection closed by remote host ***\x1b[39m")
+                    with _ansi_color(_ANSI_COLOR_RED):
+                        print("*** Connection closed by remote host ***")
                     break
                 self._print_fmt(res)
                 sys.stdout.flush()
             if stdin_fd in r:
                 res = sys.stdin.readline()
                 if not res:
-                    print("\x1b[31m*** Exiting interactive mode ***\x1b[39m")
+                    with _ansi_color(_ANSI_COLOR_RED):
+                        print("*** Exiting interactive mode ***")
                     break
                 self.sock.send(_byteize(res))
 
@@ -184,19 +207,20 @@ def interactive(*args, **kwargs):
 
 ## Misc
 def pause():
-    _str_input("\x1b[31mPausing...\x1b[39m")
+    with _ansi_color(_ANSI_COLOR_RED):
+        _str_input("Pausing...")
 
 def log(*args, **kwargs):
-    print('\x1b[33m', end='')
-    print('[+]', end=' ')
-    print(*args, end='', **kwargs)
-    print('\x1b[39m')
+    with _ansi_color(_ANSI_COLOR_YELLOW):
+        print('[+]', end=' ')
+        print(*args, end='', **kwargs)
+    print()
 
 def err(*args, **kwargs):
-    print('\x1b[31m', end='')
-    print('[-]', end=' ')
-    print(*args, end='', **kwargs)
-    print('\x1b[39m')
+    with _ansi_color(_ANSI_COLOR_RED):
+        print('[-]', end=' ')
+        print(*args, end='', **kwargs)
+    print()
 
 ## Pack/unpack
 def _genpack(name, endian, ch):
@@ -218,8 +242,11 @@ def _genunpack(name, endian, ch):
     unpacker.__name__ = name
     return unpacker
 
-for ch in 'bBhHiIqQfd':
-    for endian, endianch in [('<',''), ('<','l'), ('>','b'), ('@','n')]:
-        name = endianch + ch
-        globals()['p' + name] = _genpack('p' + name, endian, ch)
-        globals()['u' + name] = _genunpack('u' + name, endian, ch)
+def _init_pack_funcs():
+    for ch in 'bBhHiIqQfd':
+        for endian, endianch in [('<',''), ('<','l'), ('>','b'), ('@','n')]:
+            name = endianch + ch
+            globals()['p' + name] = _genpack('p' + name, endian, ch)
+            globals()['u' + name] = _genunpack('u' + name, endian, ch)
+
+_init_pack_funcs()
