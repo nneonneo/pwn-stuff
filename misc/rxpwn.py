@@ -70,8 +70,7 @@ class Socket:
     def __init__(self, target):
         ''' Create a new socket connected to the target. '''
         Socket._last_socket = self
-        self.sock = socket()
-        self.sock.connect(target)
+        self.sock = create_connection(target)
         self.echo = Socket.echo
         self.escape = Socket.escape
 
