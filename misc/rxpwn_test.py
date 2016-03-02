@@ -239,8 +239,7 @@ class TestRXPwnSockets(OutputCapturingTestCase):
     def test_interactive_stdin_close(self):
         ok = [False]
         def _interactive_thread():
-            with self.assertRaises(EOFError):
-                interactive()
+            interactive()
             ok[0] = True
 
         thread = threading.Thread(target=_interactive_thread)
@@ -249,7 +248,8 @@ class TestRXPwnSockets(OutputCapturingTestCase):
         thread.join()
         self.assertEqual(ok[0], True)
         self.assertEqual(strip_ansi(self.stdout.read()), 
-            '*** Entering interactive mode ***\n')
+            '*** Entering interactive mode ***\n'
+            '*** Exiting interactive mode ***\n')
 
     def test_interactive_server_close(self):
         ok = [False]
@@ -269,8 +269,7 @@ class TestRXPwnSockets(OutputCapturingTestCase):
     def test_interactive_basic(self):
         ok = [False]
         def _interactive_thread():
-            with self.assertRaises(EOFError):
-                interactive()
+            interactive()
             ok[0] = True
 
         thread = threading.Thread(target=_interactive_thread)
@@ -287,7 +286,8 @@ class TestRXPwnSockets(OutputCapturingTestCase):
         self.assertEqual(ok[0], True)
         self.assertEqual(strip_ansi(self.stdout.read()), 
             '*** Entering interactive mode ***\n'
-            'ABCD\n')
+            'ABCD\n'
+            '*** Exiting interactive mode ***\n')
 
 class TestRXPwnMisc(OutputCapturingTestCase):
     def test_pause(self):
