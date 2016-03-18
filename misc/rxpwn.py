@@ -77,6 +77,9 @@ def _ansi_underline():
     yield
     sys.stdout.write(_ANSI_UNDERLINE_OFF)
 
+## Useful globals
+RE = re.compile
+
 ## Socket stuff
 class Socket:
     ''' Basic socket class for interacting with remote services. '''
@@ -177,6 +180,7 @@ class Socket:
         sock_fd = self.sock.fileno()
         while 1:
             r,w,x = select.select([stdin_fd, sock_fd], [], [])
+
             if sock_fd in r:
                 res = self.sock.recv(4096)
                 if not res:
@@ -185,6 +189,7 @@ class Socket:
                     break
                 self._print_fmt(res)
                 sys.stdout.flush()
+
             if stdin_fd in r:
                 res = sys.stdin.readline()
                 if not res:
