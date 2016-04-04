@@ -60,24 +60,26 @@ def chinese_remainder(n, a):
     return sum % prod
 
 def pohlig_hellman(g, y, p, factors):
-    ''' Compute x s.t. g^x === y mod p. Decomposes problem using factors of phi(p).
-    
+    ''' Compute x s.t. g^x === y mod p. Decomposes problem using factors of ord_p(g).
+
     g: generator
     y: number to be logarithmed
     p: prime (or prime power) modulus
-    factors: a list of [(factor, multiplicity)] factors of phi(p)
-    phi: phi(p), or None to use p-1 (default if p is prime)
+    factors: a list of [(factor, multiplicity)] factors of ord_p(g)
 
-    This function works fastest when phi(p) is smooth (i.e. when
+    This function works fastest when ord_p(g) is smooth (i.e. when
     it has only small prime factors).
-    
+
+    Calculating the value and factorization of ord_p(g) is left as an
+    exercise to the reader.
+
     Running time is essentially proportional to the square-root of
     `max(q for q,r in factors)`.
     '''
 
-    phi = 1
+    order = 1
     for f, m in factors:
-        phi *= f ** m
+        order *= f ** m
 
     xi = []
     ni = []
@@ -85,11 +87,11 @@ def pohlig_hellman(g, y, p, factors):
         xf = 0
         cury = y
         qtot = f ** m
-        base = pow(g, phi // f, p)
+        base = pow(g, order // f, p)
         dlog = FastDlog(base, f+1, p)
         for k in xrange(m):
             q = f ** (k+1)
-            lhs = pow(cury, phi // q, p)
+            lhs = pow(cury, order // q, p)
             if base == 1:
                 if lhs != 1:
                     raise Exception("no solution")
