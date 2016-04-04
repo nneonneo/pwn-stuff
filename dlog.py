@@ -60,40 +60,45 @@ def chinese_remainder(n, a):
     return sum % prod
 
 def pohlig_hellman(g, y, p, factors):
-    ''' Compute x s.t. g^x === y mod p. Decomposes problem using factors of p-1.
+    ''' Compute x s.t. g^x === y mod p. Decomposes problem using factors of phi(p).
     
     g: generator
     y: number to be logarithmed
-    p: prime modulus
-    factors: a list of [(factor, multiplicity)] factors of p-1
+    p: prime (or prime power) modulus
+    factors: a list of [(factor, multiplicity)] factors of phi(p)
+    phi: phi(p), or None to use p-1 (default if p is prime)
 
-    This function works fastest when p-1 is smooth (i.e. when
+    This function works fastest when phi(p) is smooth (i.e. when
     it has only small prime factors).
     
     Running time is essentially proportional to the square-root of
     `max(q for q,r in factors)`.
     '''
 
+    phi = 1
+    for f, m in factors:
+        phi *= f ** m
+
     xi = []
     ni = []
-    for f in factors:
+    for f, m in factors:
         xf = 0
         cury = y
-        qtot = f[0]**f[1]
-        base = pow(g, (p-1) // f[0], p)
-        dlog = FastDlog(base, f[0]+1, p)
-        for k in xrange(f[1]):
-            q = f[0] ** (k+1)
-            lhs = pow(cury, (p-1) // q, p)
+        qtot = f ** m
+        base = pow(g, phi // f, p)
+        dlog = FastDlog(base, f+1, p)
+        for k in xrange(m):
+            q = f ** (k+1)
+            lhs = pow(cury, phi // q, p)
             if base == 1:
                 if lhs != 1:
                     raise Exception("no solution")
                 else:
                     continue
 
-            exp = (dlog.dlog(lhs) % f[0]) * (f[0] ** k)
+            exp = (dlog.dlog(lhs) % f) * (f ** k)
             xf += exp
-            if k != f[1]-1:
+            if k != m-1:
                 cury *= number.inverse(pow(g, exp, p), p)
         xi.append(xf)
         ni.append(qtot)
@@ -101,6 +106,15 @@ def pohlig_hellman(g, y, p, factors):
     return chinese_remainder(ni, xi)
 
 def run_tests():
+    if 1:
+        # Test prime power modulus
+        a = 2
+        n = 729
+        for i in xrange(n):
+            y = pow(a, i, n)
+            x = pohlig_hellman(a, y, n, [(2, 1), (3, 5)])
+            assert pow(a, x, n) == y
+
     if 1:
         # Test factor multiplicity
         p = 8101
