@@ -93,7 +93,10 @@ class Socket:
     def __init__(self, target):
         ''' Create a new socket connected to the target. '''
         Socket._last_socket = self
-        self.sock = socket.create_connection(target)
+        if isinstance(target, (tuple, str)):
+            self.sock = socket.create_connection(target)
+        else:
+            self.sock = target # assume socket object
         self.echo = Socket.echo
         self.escape = Socket.escape
 
@@ -114,6 +117,19 @@ class Socket:
             pass
 
         self.sock.close()
+
+    # Compatibility functions for regular sockets
+    def shutdown(self, how):
+        self.sock.shutdown(how)
+
+    def fileno(self):
+        return self.sock.fileno()
+
+    def recv(self, n):
+        return self.rd(n)
+
+    def send(self, x):
+        return self.wr(x)
 
     def rd(self, *suffixes, **kwargs):
         ''' Read until a particular set of criteria come true.
