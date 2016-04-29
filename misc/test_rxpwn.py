@@ -289,6 +289,20 @@ class TestRXPwnSockets(OutputCapturingTestCase):
             'ABCD\n'
             '*** Exiting interactive mode ***\n')
 
+    def test_rd_partial(self):
+        self.server.send(b'test')
+        self.server.shutdown(socket.SHUT_WR)
+        with self.assertRaises(rxpwn.PartialReadError) as ecm:
+            rd(b'\n')
+        self.assertEqual(ecm.exception.data, b'test')
+
+    def test_rd_oserror(self):
+        self.sock.sock.setblocking(0)
+        self.server.send(b'test')
+        with self.assertRaises(rxpwn.PartialReadError) as ecm:
+            rd(b'\n')
+        self.assertEqual(ecm.exception.data, b'test')
+
 class TestRXPwnMisc(OutputCapturingTestCase):
     def test_pause(self):
         self.stdin.write('\n')

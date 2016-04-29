@@ -80,6 +80,21 @@ def _ansi_underline():
 ## Useful globals
 RE = re.compile
 
+class PartialReadError(IOError):
+    def __init__(self, data, exc):
+        IOError.__init__(self, getattr(exc, 'errno', None), getattr(exc, 'strerror', None))
+        self.args = (data, exc)
+        self.data = data
+        self.__cause__ = exc
+
+    def __str__(self):
+        causestr = str(self.__cause__)
+        if causestr:
+            causestr = ": " + causestr
+        return '%r (%s%s)' % (self.data, type(self.__cause__).__name__, causestr)
+    def __repr__(self):
+        return '%s%r' % (type(self).__name__, self.args)
+
 ## Socket stuff
 class Socket:
     ''' Basic socket class for interacting with remote services. '''
@@ -145,9 +160,12 @@ class Socket:
         out = bytearray()
         echo = kwargs.get('echo', self.echo)
         while 1:
-            x = self.sock.recv(1)
+            try:
+                x = self.sock.recv(1)
+            except socket.error as e:
+                raise PartialReadError(bytes(out), e)
             if not x:
-                raise EOFError()
+                raise PartialReadError(bytes(out), EOFError())
             if echo:
                 self._print_fmt(x)
                 sys.stdout.flush()
