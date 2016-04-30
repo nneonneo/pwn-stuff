@@ -105,15 +105,21 @@ class Socket:
 
     # echo => whether rd/pr/wr echo back what they write
     # escape => whether rd/pr/wr escape unprintables
-    def __init__(self, target):
+    def __init__(self, target, echo=None, escape=None):
         ''' Create a new socket connected to the target. '''
         Socket._last_socket = self
         if isinstance(target, (tuple, str)):
             self.sock = socket.create_connection(target)
         else:
             self.sock = target # assume socket object
-        self.echo = Socket.echo
-        self.escape = Socket.escape
+
+        if echo is None:
+            echo = Socket.echo
+        self.echo = echo
+
+        if escape is None:
+            escape = Socket.escape
+        self.escape = escape
 
     def _print_fmt(self, x):
         ''' Write a bytestring to the terminal, escaping non-printable characters. '''
