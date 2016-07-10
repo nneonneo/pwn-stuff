@@ -238,6 +238,10 @@ class Socket:
                     break
                 self.sock.send(_byteize(res))
 
+def SSLSocket(addr, *args, **kwargs):
+    from ssl import wrap_socket
+    return Socket(wrap_socket(socket.create_connection(addr)), *args, **kwargs)
+
 def rd(*args, **kwargs):
     return Socket._last_socket.rd(*args, **kwargs)
 
