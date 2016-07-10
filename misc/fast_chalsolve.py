@@ -14,9 +14,9 @@ def _solve_challenge_worker(arg):
         s = ''.join(s1 + s2)
         
         # changeme
-        s = x + s
-        if sha1(s).digest().endswith('\xff\xff\xff'):
-            return s
+        news = x + s
+        if sha1(news).digest().endswith('\xff\xff\xff'):
+            return news
 
 def solve_challenge(x, n, charset='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'):
     ''' Solve a proof-of-work challenge with multiprocessing.
