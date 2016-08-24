@@ -1,9 +1,8 @@
-import numpy as np
 import random
 import itertools
 
 def num2vec(x, w):
-    return np.array([int(c == '1') for c in '{:0{w}b}'.format(x, w=w)])
+    return [int(c == '1') for c in '{:0{w}b}'.format(x, w=w)]
 
 def solve_gf2(A, b):
     ''' Solve a system of linear equations over GF(2), i.e. solve for x where Ax=b.
@@ -16,9 +15,8 @@ def solve_gf2(A, b):
     '''
 
     # Construct augmented matrix M
-    b = b[:,None]
-    M = np.hstack([A, b])
-    nr, nc = A.shape
+    M = [Ar + [bi] for Ar, bi in zip(A, b)]
+    nr, nc = len(A), len(A[0])
 
     # Pack the bits of M into a column of bigints
     M = [sum((long(v) << (nc - i)) for i, v in enumerate(row)) for row in M]
@@ -43,7 +41,7 @@ def solve_gf2(A, b):
         if c >= nr:
             break
 
-    M = np.array([num2vec(row, nc+1) for row in M])
+    M = [num2vec(row, nc+1) for row in M]
     unset = sorted(set(xrange(nc)) - set(leads))
 
     # give some randomness to the solution order
@@ -53,14 +51,15 @@ def solve_gf2(A, b):
         prod.append(random.choice([[0,1], [1,0]]))
 
     for possible in itertools.product(*prod):
-        x = np.array([-1] * nc)
+        x = [-1] * nc
         for i, t in enumerate(unset):
             x[t] = possible[i]
         for i in reversed(xrange(nr)):
             if leads[i] == -1:
                 continue
             k = leads[i]
-            x[k] = (M[i,k+1:nc].dot(x[k+1:nc]) % 2) ^ M[i,nc]
+            Mx = sum(Mi * xi for Mi, xi in zip(M[i][k+1:nc], x[k+1:nc]))
+            x[k] = (Mx % 2) ^ M[i][nc]
         yield x
 
 if __name__ == '__main__':
@@ -84,7 +83,9 @@ if __name__ == '__main__':
         input.append(v)
         crcs.append(crc32(v))
 
-    A = np.transpose([num2vec(c, 32) for c in crcs])
+    A = [num2vec(c, 32) for c in crcs]
+    # Transpose A
+    A = [[A[i][j] for i in xrange(len(A))] for j in xrange(len(A[0]))]
     b = num2vec(target, 32)
 
     for x in solve_gf2(A, b):
