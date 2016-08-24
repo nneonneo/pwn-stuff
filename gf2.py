@@ -4,6 +4,9 @@ import itertools
 def num2vec(x, w):
     return [int(c == '1') for c in '{:0{w}b}'.format(x, w=w)]
 
+def transpose(A):
+    return [[A[i][j] for i in xrange(len(A))] for j in xrange(len(A[0]))]
+
 def solve_gf2(A, b):
     ''' Solve a system of linear equations over GF(2), i.e. solve for x where Ax=b.
     Yields *all* solutions.
@@ -83,9 +86,7 @@ if __name__ == '__main__':
         input.append(v)
         crcs.append(crc32(v))
 
-    A = [num2vec(c, 32) for c in crcs]
-    # Transpose A
-    A = [[A[i][j] for i in xrange(len(A))] for j in xrange(len(A[0]))]
+    A = transpose([num2vec(c, 32) for c in crcs])
     b = num2vec(target, 32)
 
     for x in solve_gf2(A, b):
