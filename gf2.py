@@ -44,6 +44,10 @@ def solve_gf2(A, b):
         if c >= nr:
             break
 
+    if 1 in M:
+        # 0000...001 => impossible
+        return
+
     M = [num2vec(row, nc+1) for row in M]
     unset = sorted(set(xrange(nc)) - set(leads))
 
