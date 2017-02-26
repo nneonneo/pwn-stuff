@@ -16,6 +16,7 @@ dialect_defaults = dict(
     standard_escapes = make_escape_dict('abfnrtv\\'), # standard short escape characters
     hex_escape = True, # allow hex escapes?
     oct_escape = True, # allow octal escapes (backslash plus 1-3 octal digits)?
+    oct_leading_zero = False, # do octal escapes require leading zero?
     hex_continues = False, # are hex escapes unbounded in length?
     force_encode = '', # characters that _must_ be encoded no matter what
 )
@@ -40,7 +41,7 @@ default_dialect = Dialect()
 python_dialect = Dialect(quote_char="'", line_continuation='\\')
 c_dialect = Dialect(hex_continues=True, line_continuation='\\', force_encode='?') # force encode ? to avoid trigraphs
 ruby_dialect = Dialect(quote_char='"', line_continuation='\\', standard_escapes=make_escape_dict('bfnrt\\#'))
-echo_dialect = Dialect(quote_char="'", per_line_quotes=True, line_prefix="echo -ne ", force_encode="'", oct_escape=False)
+echo_dialect = Dialect(quote_char="'", per_line_quotes=True, line_prefix="echo -ne ", force_encode="'", oct_leading_zero=True)
 js_dialect = Dialect(quote_char="'", oct_escape=False, standard_escapes=make_escape_dict('bfnrt\\')) # JS is deprecating octal escapes
 java_dialect = Dialect(quote_char='"', per_line_quotes=True, line_continuation='+', hex_escape=False, standard_escapes=make_escape_dict('bfnrt\\')) # Java doesn't have hex escapes at all!
 
@@ -67,9 +68,12 @@ class LineEncoder:
             # octal escapes are shorter (or equal length) to hex escapes
             self.prevhex = False
             if nextc and nextc in '01234567':
-                return '\\%03o' % ord(c)
+                val = '%03o' % ord(c)
             else:
-                return '\\%o' % ord(c)
+                val = '%o' % ord(c)
+            if self.dialect.oct_leading_zero and (not val.startswith('0') or len(val) == 3):
+                val = '0' + val
+            return '\\' + val
         elif self.dialect.hex_escape:
             self.prevhex = self.dialect.hex_continues
             return '\\x%02x' % ord(c)
