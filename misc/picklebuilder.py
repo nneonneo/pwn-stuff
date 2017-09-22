@@ -4,7 +4,7 @@ Useful especially if you want to do more than just eval(...) '''
 from __future__ import print_function
 
 import sys
-import types
+import imp
 import pickle
 
 class F(object):
@@ -26,7 +26,46 @@ class F(object):
 for meth in ['__getitem__', '__setitem__', '__delitem__', '__add__', '__mul__', '__divmod__']:
     setattr(F, meth, (lambda meth: lambda self, *args: F(getattr)(self, meth)(*args))(meth))
 
-dummy_modules = []
+class DummyModuleLoader:
+    dummy_modules = []
+    want_load = None
+
+    @classmethod
+    def remove_all(cls):
+        for m in cls.dummy_modules:
+            del sys.modules[m]
+        del cls.dummy_modules[:]
+        cls.want_load = None
+
+    @classmethod
+    def find_module(cls, fullname, path=None):
+        if fullname == cls.want_load or cls.is_package(fullname):
+            cls.dummy_modules.append(fullname)
+            return cls
+
+    @classmethod
+    def is_package(cls, fullname):
+        if cls.want_load is None:
+            return False
+        want = cls.want_load.split('.')
+        have = fullname.split('.')
+        if want[:len(have)] == have:
+            return True
+        return False
+
+    @classmethod
+    def load_module(cls, fullname):
+        ispkg = cls.is_package(fullname)
+        mod = sys.modules.setdefault(fullname, imp.new_module(fullname))
+        mod.__file__ = "dummy"
+        mod.__loader__ = cls
+        if ispkg:
+            mod.__path__ = []
+            mod.__package__ = fullname
+        else:
+            mod.__package__ = fullname.rpartition('.')[0]
+        return mod
+sys.meta_path.append(DummyModuleLoader)
 
 def M(m, f):
     ''' Wrap a module function.
@@ -35,8 +74,9 @@ def M(m, f):
     '''
 
     if m not in sys.modules:
-        sys.modules[m] = types.ModuleType(m, "dummy %s module" % m)
-        dummy_modules.append(m)
+        DummyModuleLoader.want_load = m
+        __import__(m)
+
     if not hasattr(sys.modules[m], f):
         def dummy_function(*args):
             print("%s.%s(%s) called" % (m, f, ', '.join(map(str, args))))
@@ -49,11 +89,7 @@ def M(m, f):
 
 def test(obj):
     p = pickle.dumps(obj)
-
-    for m in dummy_modules:
-        del sys.modules[m]
-    del dummy_modules[:]
-
+    DummyModuleLoader.remove_all()
     return pickle.loads(p)
 
 if __name__ == '__main__':
