@@ -4,6 +4,9 @@ import itertools
 def num2vec(x, w):
     return [int(c == '1') for c in '{:0{w}b}'.format(x, w=w)]
 
+def vec2num(x):
+    return sum(xi << i for i, xi in enumerate(reversed(x)))
+
 def transpose(A):
     return [[A[i][j] for i in xrange(len(A))] for j in xrange(len(A[0]))]
 
