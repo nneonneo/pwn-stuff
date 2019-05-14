@@ -1,4 +1,4 @@
-char shellcode[] = "H1\300H\215=\30\0\0\0PTZH\215O\vQH\215O\bQH\215O\5QT^\260;\17\5/bin/sh\0-c\0ls -la\0";
+char shellcode[] = "1\300H\215=\24\0\0\0PTZH\215O\vQH\215O\bQWT^\260;\17\5/bin/sh\0-c\0ls -la\0";
 
 #include <sys/mman.h>
 #include <string.h>
