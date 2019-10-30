@@ -12,6 +12,15 @@ Elf32_Half = c_uint16
 Elf32_Word = c_uint32
 Elf32_Addr = Elf32_Off = c_uint32
 
+Elf64_Half = c_uint16
+Elf64_Word = c_uint32
+Elf64_Xword = c_uint64
+Elf64_Addr = Elf64_Off = c_uint64
+
+class ELFCLASS(enum.IntEnum):
+    _32 = 1
+    _64 = 2
+
 class PT(enum.IntEnum):
     NULL = 0	# Program header table entry unused
     LOAD = 1	# Loadable program segment
@@ -108,7 +117,13 @@ class SHF(enum.IntEnum):
 
 class Elf32_Ehdr(Structure):
     _fields_ = [
-        ('e_ident', c_char * 16),   # Id bytes
+        ('ei_mag', c_char * 4),     # e_ident EI_MAG0~3
+        ('ei_class', Elf_Byte),       # e_ident EI_CLASS
+        ('ei_data', Elf_Byte),        # e_ident EI_DATA
+        ('ei_version', Elf_Byte),     # e_ident EI_VERSION
+        ('ei_osabi', Elf_Byte),       # e_ident EI_OSABI
+        ('ei_abiversion', Elf_Byte),  # e_ident EI_ABIVERSION
+        ('ei_pad', c_char * 7),     # e_ident EI_PAD
         ('e_type', Elf32_Half),     # file type
         ('e_machine', Elf32_Half),  # machine type
         ('e_version', Elf32_Word),  # version number
@@ -160,6 +175,79 @@ class Elf32_Sym(Structure):
         ('st_shndx', Elf32_Half),	# section index of symbol
     ]
 
+class Elf32_Dyn(Structure):
+    _fields_ = [
+        ('d_tag', Elf32_Word),	# entry tag value
+        ('d_val', Elf32_Word),	# value or pointer
+    ]
+
+
+class Elf64_Ehdr(Structure):
+    _fields_ = [
+        ('ei_mag', c_char * 4),     # e_ident EI_MAG0~3
+        ('ei_class', c_char),       # e_ident EI_CLASS
+        ('ei_data', c_char),        # e_ident EI_DATA
+        ('ei_version', c_char),     # e_ident EI_VERSION
+        ('ei_osabi', c_char),       # e_ident EI_OSABI
+        ('ei_abiversion', c_char),  # e_ident EI_ABIVERSION
+        ('ei_pad', c_char * 7),     # e_ident EI_PAD
+        ('e_type', Elf64_Half),     # file type
+        ('e_machine', Elf64_Half),  # machine type
+        ('e_version', Elf64_Word),  # version number
+        ('e_entry', Elf64_Addr),    # entry point
+        ('e_phoff', Elf64_Off),     # Program hdr offset
+        ('e_shoff', Elf64_Off),     # Section hdr offset
+        ('e_flags', Elf64_Word),    # Processor flags
+        ('e_ehsize', Elf64_Half),   # sizeof ehdr
+        ('e_phentsize', Elf64_Half),# Program header entry size
+        ('e_phnum', Elf64_Half),    # Number of program headers
+        ('e_shentsize', Elf64_Half),# Section header entry size
+        ('e_shnum', Elf64_Half),    # Number of section headers
+        ('e_shstrndx', Elf64_Half), # String table index
+    ]
+
+class Elf64_Phdr(Structure):
+    _fields_ = [
+        ('p_type', Elf64_Word),     # entry type
+        ('p_flags', Elf64_Word),    # flags
+        ('p_offset', Elf64_Off),    # offset
+        ('p_vaddr', Elf64_Addr),    # virtual address
+        ('p_paddr', Elf64_Addr),    # physical address
+        ('p_filesz', Elf64_Xword),   # file size
+        ('p_memsz', Elf64_Xword),    # memory size
+        ('p_align', Elf64_Xword),    # memory & file alignment
+    ]
+
+class Elf64_Shdr(Structure):
+    _fields_ = [
+        ('sh_name', Elf64_Word),    # section name (.shstrtab index)
+        ('sh_type', Elf64_Word),    # section type
+        ('sh_flags', Elf64_Xword),   # section flags
+        ('sh_addr', Elf64_Addr),    # virtual address
+        ('sh_offset', Elf64_Off),   # file offset
+        ('sh_size', Elf64_Xword),    # section size
+        ('sh_link', Elf64_Word),    # link to another
+        ('sh_info', Elf64_Word),    # misc info
+        ('sh_addralign', Elf64_Xword),   # memory alignment
+        ('sh_entsize', Elf64_Xword), # table entry size
+    ]
+
+class Elf64_Sym(Structure):
+    _fields_ = [
+        ('st_name', Elf64_Word),	# Symbol name (.strtab index)
+        ('st_info', Elf_Byte),	# type / binding attrs
+        ('st_other', Elf_Byte),	# unused
+        ('st_shndx', Elf64_Half),	# section index of symbol
+        ('st_value', Elf64_Addr),	# value of symbol
+        ('st_size', Elf64_Xword),	# size of symbol
+    ]
+
+class Elf64_Dyn(Structure):
+    _fields_ = [
+        ('d_tag', Elf64_Xword),	# entry tag value
+        ('d_val', Elf64_Xword),	# value or pointer
+    ]
+
 def print_struct(s):
     for name, _ in type(s)._fields_:
         print('  %s = %s' % (name, getattr(s, name)))
@@ -201,12 +289,29 @@ def reconstruct_sections(m, end):
 
     # Load ELF header
     ehdr = Elf32_Ehdr.from_buffer(m)
+    if ehdr.ei_mag != b'\x7fELF':
+        raise ValueError("Not an ELF file?")
+    if ehdr.ei_class == ELFCLASS._32:
+        Elf_Phdr = Elf32_Phdr
+        Elf_Shdr = Elf32_Shdr
+        Elf_Sym = Elf32_Sym
+        Elf_Dyn = Elf32_Dyn
+        WORDSIZE = 4
+    elif ehdr.ei_class == ELFCLASS._64:
+        ehdr = Elf64_Ehdr.from_buffer(m)
+        Elf_Phdr = Elf64_Phdr
+        Elf_Shdr = Elf64_Shdr
+        Elf_Sym = Elf64_Sym
+        Elf_Dyn = Elf64_Dyn
+        WORDSIZE = 8
+    else:
+        raise ValueError("Unknown ELF class %d" % ehdr.ei_class)
 
     # Load program headers
     phoff = ehdr.e_phoff
     phnum = ehdr.e_phnum
     phsize = ehdr.e_phentsize
-    phdrs = [Elf32_Phdr.from_buffer(m[phoff+i*phsize:]) for i in range(phnum)]
+    phdrs = [Elf_Phdr.from_buffer(m[phoff+i*phsize:]) for i in range(phnum)]
 
     p_dyn = None
     p_loads = []
@@ -229,30 +334,20 @@ def reconstruct_sections(m, end):
 
     # Set up sections
     sections = [] # [(name, Shdr)]
-    sections.append(('', Elf32_Shdr(sh_type=SHT.NULL))) # null header
+    sections.append(('', Elf_Shdr(sh_type=SHT.NULL))) # null header
 
     if p_dyn is not None:
         # Load DYNAMIC section data
         dynlist = []
         pos = p_dyn.p_offset
         while True:
-            tag, data = readstruct('<II', m, pos)
-            pos += 8
-            dynlist.append((tag, data))
-            if tag == 0:
+            dyn = Elf_Dyn.from_buffer(m[pos:])
+            pos += sizeof(Elf_Dyn)
+            dynlist.append((dyn.d_tag, dyn.d_val))
+            if dyn.d_tag == 0:
                 break
 
         dynamic = dict(dynlist)
-
-        sections.append(('.dynamic', Elf32_Shdr(
-            sh_type=SHT.DYNAMIC,
-            sh_flags=SHF.WRITE | SHF.ALLOC,
-            sh_addr=p_dyn.p_vaddr,
-            sh_offset=p_dyn.p_offset,
-            sh_size=p_dyn.p_memsz,
-            sh_addralign=4,
-            sh_entsize=8,
-        )))
 
         # .dynsym/.dynstr
         symaddr = dynamic[DT.SYMTAB]
@@ -264,48 +359,62 @@ def reconstruct_sections(m, end):
             symsize = straddr - symaddr
 
         dynsym_nr = len(sections)
-        sections.append(('.dynsym', Elf32_Shdr(
+        dynsym_es = dynamic.get(DT.SYMENT, sizeof(Elf_Sym))
+        sections.append(('.dynsym', Elf_Shdr(
             sh_type=SHT.DYNSYM,
             sh_flags=SHF.ALLOC,
             sh_addr=symaddr,
             sh_offset=addr_to_offset(symaddr),
             sh_size=symsize,
-            sh_addralign=4,
+            sh_addralign=WORDSIZE,
             sh_link=len(sections)+1, # link to .dynstr
-            sh_entsize=dynamic.get(DT.SYMENT, sizeof(Elf32_Sym))
+            sh_entsize=dynsym_es
         )))
-        sections.append(('.dynstr', Elf32_Shdr(
+        dynstr_nr = len(sections)
+        sections.append(('.dynstr', Elf_Shdr(
             sh_type=SHT.STRTAB,
             sh_flags=SHF.ALLOC,
             sh_addr=straddr,
             sh_offset=addr_to_offset(straddr),
             sh_size=dynamic.get(DT.STRSZ, 0),
-            sh_addralign=1)))
+            sh_addralign=1
+        )))
+
+        sections.append(('.dynamic', Elf_Shdr(
+            sh_type=SHT.DYNAMIC,
+            sh_flags=SHF.WRITE | SHF.ALLOC,
+            sh_addr=p_dyn.p_vaddr,
+            sh_offset=p_dyn.p_offset,
+            sh_size=p_dyn.p_memsz,
+            sh_addralign=WORDSIZE,
+            sh_link=dynstr_nr,
+            sh_entsize=sizeof(Elf_Dyn),
+        )))
 
         # .hash/.gnu.hash
         if DT.GNU_HASH in dynamic:
             addr = dynamic[DT.GNU_HASH]
             offs = addr_to_offset(addr)
             nbuckets, symndx, maskwords, shift2 = readstruct('<IIII', m, offs)
-            ### XXX Don't know nsyms?! Should be (nsyms - symndx) * 4 size
-            size = 16 + maskwords*4 + nbuckets*4 + (symsize//16 - symndx)*4
-            sections.append(('.gnu.hash', Elf32_Shdr(
+            size = 16 + maskwords*WORDSIZE + nbuckets*4 + (symsize//dynsym_es - symndx)*4
+            sections.append(('.gnu.hash', Elf_Shdr(
                 sh_type=SHT.GNU_HASH,
                 sh_flags=SHF.ALLOC,
                 sh_addr=addr,
                 sh_offset=offs,
                 sh_size=size,
-                sh_addralign=4,
+                sh_addralign=WORDSIZE,
                 sh_link=dynsym_nr,
-                sh_entsize=4,
+                sh_entsize=0,
             )))
 
         elif DT.HASH in dynamic:
             addr = dynamic[DT.HASH]
             offs = addr_to_offset(addr)
             nbuckets, nchains = readstruct('<II', m, offs)
+            # TODO does this change in 64-bit binaries?
             size = 8 + nbuckets*4 + nchains*4
-            sections.append(('.hash', Elf32_Shdr(
+            sections.append(('.hash', Elf_Shdr(
                 sh_type=SHT.HASH,
                 sh_flags=SHF.ALLOC,
                 sh_addr=dynamic[DT.HASH],
@@ -320,48 +429,48 @@ def reconstruct_sections(m, end):
 
         # .rel[a].dyn/.rel[a].plt
         if dynamic[DT.PLTREL] == DT.RELA:
-            sections.append(('.rela.dyn', Elf32_Shdr(
-                sh_type=SHT.REL,
+            sections.append(('.rela.dyn', Elf_Shdr(
+                sh_type=SHT.RELA,
                 sh_flags=SHF.ALLOC,
                 sh_addr=dynamic[DT.RELA],
                 sh_offset=addr_to_offset(dynamic[DT.RELA]),
                 sh_size=dynamic[DT.RELASZ],
-                sh_addralign=4,
+                sh_addralign=WORDSIZE,
                 sh_link=dynsym_nr,
-                sh_entsize=dynamic.get(DT.RELAENT, 8),
+                sh_entsize=dynamic.get(DT.RELAENT, 3 * WORDSIZE),
             )))
 
-            sections.append(('.rela.plt', Elf32_Shdr(
-                sh_type=SHT.REL,
+            sections.append(('.rela.plt', Elf_Shdr(
+                sh_type=SHT.RELA,
                 sh_flags=SHF.ALLOC,
                 sh_addr=dynamic[DT.JMPREL],
                 sh_offset=addr_to_offset(dynamic[DT.JMPREL]),
                 sh_size=dynamic[DT.PLTRELSZ],
-                sh_addralign=4,
+                sh_addralign=WORDSIZE,
                 sh_link=dynsym_nr,
-                sh_entsize=dynamic.get(DT.RELENT, 8),
+                sh_entsize=dynamic.get(DT.RELENT, 3 * WORDSIZE),
             )))
         elif dynamic[DT.PLTREL] == DT.REL:
-            sections.append(('.rel.dyn', Elf32_Shdr(
+            sections.append(('.rel.dyn', Elf_Shdr(
                 sh_type=SHT.REL,
                 sh_flags=SHF.ALLOC,
                 sh_addr=dynamic[DT.REL],
                 sh_offset=addr_to_offset(dynamic[DT.REL]),
                 sh_size=dynamic[DT.RELSZ],
-                sh_addralign=4,
+                sh_addralign=WORDSIZE,
                 sh_link=dynsym_nr,
-                sh_entsize=dynamic.get(DT.RELENT, 8),
+                sh_entsize=dynamic.get(DT.RELENT, 2 * WORDSIZE),
             )))
 
-            sections.append(('.rel.plt', Elf32_Shdr(
+            sections.append(('.rel.plt', Elf_Shdr(
                 sh_type=SHT.REL,
                 sh_flags=SHF.ALLOC,
                 sh_addr=dynamic[DT.JMPREL],
                 sh_offset=addr_to_offset(dynamic[DT.JMPREL]),
                 sh_size=dynamic[DT.PLTRELSZ],
-                sh_addralign=4,
+                sh_addralign=WORDSIZE,
                 sh_link=dynsym_nr,
-                sh_entsize=dynamic.get(DT.RELENT, 8),
+                sh_entsize=dynamic.get(DT.RELENT, 2 * WORDSIZE),
             )))
         else:
             raise Exception("unknown PLTREL value {}".format(dynamic[DT.PLTREL]))
@@ -371,23 +480,23 @@ def reconstruct_sections(m, end):
         # .init/.init_array/.fini/.fini_array
         # We don't bother with .init or .fini.
         if DT.INIT_ARRAY in dynamic:
-            sections.append(('.init_array', Elf32_Shdr(
+            sections.append(('.init_array', Elf_Shdr(
                 sh_type=SHT.INIT_ARRAY,
                 sh_flags=SHF.WRITE | SHF.ALLOC,
                 sh_addr=dynamic[DT.INIT_ARRAY],
                 sh_offset=addr_to_offset(dynamic[DT.INIT_ARRAY]),
                 sh_size=dynamic[DT.INIT_ARRAYSZ],
-                sh_addralign=4,
+                sh_addralign=WORDSIZE,
             )))
 
         if DT.FINI_ARRAY in dynamic:
-            sections.append(('.fini_array', Elf32_Shdr(
+            sections.append(('.fini_array', Elf_Shdr(
                 sh_type=SHT.FINI_ARRAY,
                 sh_flags=SHF.WRITE | SHF.ALLOC,
                 sh_addr=dynamic[DT.FINI_ARRAY],
                 sh_offset=addr_to_offset(dynamic[DT.FINI_ARRAY]),
                 sh_size=dynamic[DT.FINI_ARRAYSZ],
-                sh_addralign=4,
+                sh_addralign=WORDSIZE,
             )))
 
     # .text/.data/.rodata/.bss/.other
@@ -420,7 +529,7 @@ def reconstruct_sections(m, end):
         max_len = 0
         max_i = 0
         for i, (ins, ine) in enumerate(ivals):
-            tmp_sections.append((prefix + '.' + str(i), Elf32_Shdr(
+            tmp_sections.append((prefix + '.' + str(i), Elf_Shdr(
                 sh_type=type,
                 sh_flags=flags,
                 sh_addr=ins,
@@ -445,7 +554,7 @@ def reconstruct_sections(m, end):
     if p_dyn is not None:
         # Fixup section indices in symtab
         symoffs = addr_to_offset(symaddr)
-        symbols = (Elf32_Sym * (symsize//sizeof(Elf32_Sym))).from_buffer(m[symoffs:symoffs+symsize])
+        symbols = (Elf_Sym * (symsize//sizeof(Elf_Sym))).from_buffer(m[symoffs:symoffs+symsize])
         for symi, sym in enumerate(symbols):
             if sym.st_value != 0 and 0 < sym.st_shndx < 0xff00:
                 for i, (name, section) in enumerate(sections):
@@ -456,7 +565,7 @@ def reconstruct_sections(m, end):
                     print("section for symbol {} (value={:08x}, shndx={}) not found!".format(symi, sym.st_value, sym.st_shndx))
 
     # Write the strtab
-    strtab = Elf32_Shdr(sh_type=SHT.STRTAB, sh_addralign=1)
+    strtab = Elf_Shdr(sh_type=SHT.STRTAB, sh_addralign=1)
     sections.append(('.strtab', strtab))
 
     strs = []
@@ -466,16 +575,16 @@ def reconstruct_sections(m, end):
         strs.append(name + '\0')
         strpos += len(name) + 1
 
-    strtab.sh_offset = end + len(sections) * sizeof(Elf32_Shdr)
+    strtab.sh_offset = end + len(sections) * sizeof(Elf_Shdr)
     strtab.sh_size = strpos
 
     # Write the sections
-    file_sections = (Elf32_Shdr * len(sections)).from_buffer(m[end:])
+    file_sections = (Elf_Shdr * len(sections)).from_buffer(m[end:])
     file_sections[:] = [section for name, section in sections]
     ehdr.e_shnum = len(sections)
     ehdr.e_shstrndx = len(sections)-1
     ehdr.e_shoff = end
-    ehdr.e_shentsize = sizeof(Elf32_Shdr)
+    ehdr.e_shentsize = sizeof(Elf_Shdr)
 
     offs = strtab.sh_offset
     size = strtab.sh_size
