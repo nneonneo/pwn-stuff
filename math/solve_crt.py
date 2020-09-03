@@ -33,8 +33,8 @@ def solve_crt(rems, mods):
     newrems = []
     newmods = []
 
-    for i in xrange(len(mods)):
-        for j in xrange(i+1, len(mods)):
+    for i in range(len(mods)):
+        for j in range(i+1, len(mods)):
             g = gcd(mods[i], mods[j])
             if g == 1:
                 continue
@@ -64,7 +64,7 @@ def solve_crt(rems, mods):
     for k in mods:
         n *= k
 
-    for i in xrange(len(mods)):
+    for i in range(len(mods)):
         ni = n // mods[i]
         s += rems[i] * modinv(ni, mods[i]) * ni
     return s % n, n

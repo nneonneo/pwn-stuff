@@ -1,6 +1,7 @@
 from sage.all import *
 import fpylll
 import operator
+from functools import reduce
 
 def solve_linear_mod(equations, bounds):
     ''' Solve an arbitrary system of modular linear equations over different moduli.
@@ -54,7 +55,7 @@ def solve_linear_mod(equations, bounds):
         # Fill in vars block of B
         B[NR + vi, vi] = scale
         # Fill in "guess" for variable axis - try reducing bounds if the result is wrong
-        Y[NR + vi] = (int(bounds[var]) / 2) * scale
+        Y[NR + vi] = (int(bounds[var]) >> 1) * scale
 
     # Extract coefficients from equations
     for ri, (rel, m) in enumerate(equations):
@@ -98,11 +99,13 @@ def solve_linear_mod(equations, bounds):
     result = fpylll.CVP.closest_vector(Bt, Y)
 
     # Check result for sanity
-    if map(int, result[:NR]) != map(int, Y[:NR]):
+    if list(map(int, result[:NR])) != list(map(int, Y[:NR])):
         raise ValueError("CVP returned an incorrect result: input %s, output %s" % (Y, result))
+
     res = {}
     for vi, var in enumerate(vars):
-        aa, bb = divmod(result[NR + vi], scales[var])
+        aa = result[NR + vi] // scales[var]
+        bb = result[NR + vi] % scales[var]
         if bb:
             import warnings
             warnings.warn("CVP returned suspicious result: %s=%d is not scaled correctly" % (var, result[NR + vi]))
@@ -114,7 +117,7 @@ if __name__ == '__main__':
     import hashlib
 
     def sha1(x):
-        return int(hashlib.sha1(x).hexdigest(), 16)
+        return int(hashlib.sha1(x.encode()).hexdigest(), 16)
 
 
     ## DSA with LCG nonces, https://id0-rsa.pub/problem/44/

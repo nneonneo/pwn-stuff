@@ -1,4 +1,5 @@
 from Crypto.Util import number
+from functools import reduce
 
 def isqrt(n):
     x = n
@@ -16,8 +17,8 @@ class FastDlog(object):
 
         s = 1
         ga = pow(g, a, p)
-        for j in xrange(a):
-            if (j+1) % 100000 == 0: print 'cache progress...', j
+        for j in range(a):
+            if (j+1) % 100000 == 0: print('cache progress...', j)
             lookup[s] = j
             s = (ga*s) % p
 
@@ -39,8 +40,8 @@ class FastDlog(object):
         p = self.p
         g = self.g
         s = 1
-        for i in xrange(a):
-            if (i+1) % 100000 == 0: print 'lookup progress...', i
+        for i in range(a):
+            if (i+1) % 100000 == 0: print('lookup progress...', i)
             v = (y*s) % p
             if v in lookup:
                 return lookup[v] * a - i
@@ -55,7 +56,7 @@ def chinese_remainder(n, a):
     prod = reduce(lambda a, b: a*b, n)
  
     for n_i, a_i in zip(n, a):
-        p = prod / n_i
+        p = prod // n_i
         sum += a_i * number.inverse(p, n_i) * p
     return sum % prod
 
@@ -89,7 +90,7 @@ def pohlig_hellman(g, y, p, factors):
         qtot = f ** m
         base = pow(g, order // f, p)
         dlog = FastDlog(base, f+1, p)
-        for k in xrange(m):
+        for k in range(m):
             q = f ** (k+1)
             lhs = pow(cury, order // q, p)
             if base == 1:
@@ -112,7 +113,7 @@ def run_tests():
         # Test prime power modulus
         a = 2
         n = 729
-        for i in xrange(n):
+        for i in range(n):
             y = pow(a, i, n)
             x = pohlig_hellman(a, y, n, [(2, 1), (3, 5)])
             assert pow(a, x, n) == y
@@ -137,7 +138,7 @@ def run_tests():
     if 1:
         # sanity tests
         assert FastDlog(6, 60, 61).dlog(pow(6, 38, 61)) == 38
-        for i in xrange(60):
+        for i in range(60):
             assert pohlig_hellman(6, pow(6, i, 61), 61, [(2,2),(3,1),(5,1)]) == i
 
     if 1:
@@ -148,7 +149,7 @@ def run_tests():
         og = 1244332567416142926546474146504106577989088313298344038017735
         factors = [(2, 1), (3, 4), (5, 1), (13, 1), (397, 1), (34703, 1), (142231, 1), (663997, 1), (1335134757001, 1), (1681985613731, 1), (80885896977317, 1)]
 
-        print pohlig_hellman(g, h, p, factors)
+        print(pohlig_hellman(g, h, p, factors))
         # => 398107572758509184512000160060709442427941395118355047140976
 
 if __name__ == '__main__':

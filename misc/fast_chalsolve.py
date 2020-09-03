@@ -4,21 +4,20 @@
 #  to reflect your actual PoW: prefix/postfix, hash function, and success condition).
 
 def _solve_challenge_worker(arg):
-    from rxpwn import log
-    from hashlib import sha1
+    from hashlib import sha256
     from itertools import product
 
     i, s1, x, n, charset = arg
-    log("proof of work ...", i*(len(charset)**n))
+    print("proof of work ... %d" % (i*(len(charset)**n)))
     for s2 in product(charset, repeat=n):
-        s = ''.join(s1 + s2)
+        s = bytearray(s1 + s2)
         
         # changeme
         news = x + s
-        if sha1(news).digest().endswith('\xff\xff\xff'):
-            return news
+        if sha256(news).digest().startswith(b'\0\0\0'):
+            return s
 
-def solve_challenge(x, n, charset='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'):
+def solve_challenge(x, n, charset=b'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'):
     ''' Solve a proof-of-work challenge with multiprocessing.
 
     x: known prefix/suffix

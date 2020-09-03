@@ -19,7 +19,7 @@ def solve_linear_mod_2k(a, b, k):
     basek = k - mp
     basen = 1 << basek
     base = ((-b) * invmod(a, basen)) & (basen - 1)
-    for i in xrange(1 << mp):
+    for i in range(1 << mp):
         yield base + (i << basek)
 
 def solve_linear_mod_pk(a, b, p, k):
@@ -38,7 +38,7 @@ def solve_linear_mod_pk(a, b, p, k):
     basek = k - mp
     basen = p ** basek
     base = ((-b) * invmod(a, basen)) % basen
-    for i in xrange(p ** mp):
+    for i in range(p ** mp):
         yield base + i * basen
 
 def solve_linear_prime_power(a, b, p, k):
@@ -50,7 +50,7 @@ def solve_linear_prime_power(a, b, p, k):
 def solve_linear(a, b, factors):
     gens = []
     if isinstance(factors, dict):
-        factors = factors.items()
+        factors = list(factors.items())
 
     for p, k in factors:
         gens.append(solve_linear_prime_power(a, b, p, k))
@@ -93,11 +93,11 @@ def solve_quadratic_mod_2k(a, b, c, k):
         b = 1
 
         x = (-c) & 1
-        for i in xrange(1, basek):
+        for i in range(1, basek):
             # lift solution x for 2^i to mod 2^{i+1}
             x = -(a*x*x + c) & ((1 << (i+1)) - 1)
 
-        for i in xrange(1 << mp):
+        for i in range(1 << mp):
             yield x + (i << basek)
 
         return
@@ -120,12 +120,12 @@ def solve_quadratic_mod_2k(a, b, c, k):
         # start with an arbitrary solution mod 2 (both 0 and 1 are solutions)
         x = 0
         hb = (b - 1) >> 1
-        for i in xrange(1, basek):
+        for i in range(1, basek):
             # lift solution x for 2^i to mod 2^{i+1}
             x = -(x*x + 2*hb*x + c) & ((1 << (i+1)) - 1)
 
         for base in [x, (-b-x) & (basen - 1)]:
-            for i in xrange(1 << mp):
+            for i in range(1 << mp):
                 yield base + (i << basek)
 
         return
@@ -137,7 +137,7 @@ def solve_quadratic_mod_2k(a, b, c, k):
     try:
         for base in sqrtmod_prime_power(rhs, 2, basek):
             x = (base - (b >> 1)) & (basen - 1)
-            for i in xrange(1 << mp):
+            for i in range(1 << mp):
                 yield x + (i << basek)
     except ValueError:
         return
@@ -178,12 +178,12 @@ def solve_quadratic_mod_pk(a, b, c, p, k):
 
         x = (-c) % p
         curpow = p
-        for i in xrange(1, basek):
+        for i in range(1, basek):
             # lift solution x for p^i to mod p^{i+1}
             curpow *= p
             x = -(a*x*x + c) % curpow
 
-        for i in xrange(p ** mp):
+        for i in range(p ** mp):
             yield x + i * basen
 
         return
@@ -202,7 +202,7 @@ def solve_quadratic_mod_pk(a, b, c, p, k):
     try:
         for base in sqrtmod_prime_power(rhs, p, basek):
             x = (base - hb) % basen
-            for i in xrange(p ** mp):
+            for i in range(p ** mp):
                 yield x + i * basen
     except ValueError:
         return
@@ -216,7 +216,7 @@ def solve_quadratic_prime_power(a, b, c, p, k):
 def solve_quadratic(a, b, c, factors):
     gens = []
     if isinstance(factors, dict):
-        factors = factors.items()
+        factors = list(factors.items())
 
     for p, k in factors:
         gens.append(solve_quadratic_prime_power(a, b, c, p, k))
