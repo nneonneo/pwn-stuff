@@ -2,16 +2,20 @@ from sage.all import *
 import fpylll
 import operator
 from functools import reduce
+import warnings
 
-def solve_linear_mod(equations, bounds):
+def solve_linear_mod(equations, bounds, means=None):
     ''' Solve an arbitrary system of modular linear equations over different moduli.
 
     equations: A sequence of (lhs == rhs, M) pairs, where lhs and rhs are expressions and M is the modulus.
     bounds: A dictionary of {var: M} entries, where var is a variable and M is the maximum of that variable (the bound).
         All variables used in the equations must be bounded.
+    means: An *optional* dictionary containing the expected value (mean) of variables.
+        Variables for which an expected value is not specified are assumed to lie uniformly in [0, bound),
+        i.e. they will have a mean of bound/2.
 
-    NOTE: Bounds are *soft*. This function may return solutions above the bounds. If this happens, make some bounds
-    much smaller and try again.
+    NOTE: Bounds are *soft*. This function may return solutions above the bounds. If this happens, and the result
+    is incorrect, make some bounds smaller and try again.
 
     >>> k = var('k')
     >>> # solve CRT
@@ -28,6 +32,8 @@ def solve_linear_mod(equations, bounds):
     # which works so long as the solutions are known to be bounded (which is of course the case for modular equations).
 
     vars = list(bounds)
+    if means is None:
+        means = {}
 
     NR = len(equations)
     NV = len(vars)
@@ -55,7 +61,7 @@ def solve_linear_mod(equations, bounds):
         # Fill in vars block of B
         B[NR + vi, vi] = scale
         # Fill in "guess" for variable axis - try reducing bounds if the result is wrong
-        Y[NR + vi] = (int(bounds[var]) >> 1) * scale
+        Y[NR + vi] = means.get(var, int(bounds[var]) >> 1) * scale
 
     # Extract coefficients from equations
     for ri, (rel, m) in enumerate(equations):
@@ -79,7 +85,7 @@ def solve_linear_mod(equations, bounds):
             if not coeff.is_integer():
                 raise ValueError('relation %s: coefficient of %s is not an integer' % (rel, var))
 
-            B[ri, vi] = int(coeff) * S
+            B[ri, vi] = (int(coeff) % m) * S
 
         # Fill in mods block of B
         B[ri, NV + ri] = m * S
@@ -100,15 +106,14 @@ def solve_linear_mod(equations, bounds):
 
     # Check result for sanity
     if list(map(int, result[:NR])) != list(map(int, Y[:NR])):
-        raise ValueError("CVP returned an incorrect result: input %s, output %s" % (Y, result))
+        raise ValueError("CVP returned an incorrect result: input %s, output %s (try increasing your bounds?)" % (Y, result))
 
     res = {}
     for vi, var in enumerate(vars):
         aa = result[NR + vi] // scales[var]
         bb = result[NR + vi] % scales[var]
         if bb:
-            import warnings
-            warnings.warn("CVP returned suspicious result: %s=%d is not scaled correctly" % (var, result[NR + vi]))
+            warnings.warn("CVP returned suspicious result: %s=%d is not scaled correctly (try adjusting your bounds?)" % (var, result[NR + vi]))
         res[var] = aa
 
     return res
@@ -232,3 +237,36 @@ if __name__ == '__main__':
     assert solution[x] % m == expsoln['x'] % m
     assert solution[y] % m == expsoln['y'] % m
     assert solution[z] % m == expsoln['z'] % m
+
+
+    ## Truncated LCG
+    mod = (1 << 32)
+    # random a/b parameters
+    a = 0xd0ab4379
+    b = 0xa34a85d3
+    shift = 20
+    nout = 3
+    # unknown initial state
+    ostate = state = 0x174c562a
+    # run LCG generator to produce truncated outputs
+    output = []
+    for i in range(nout):
+        state = (state * a + b) % mod
+        output.append(state >> shift)
+
+    # start solving given output
+    state = var('state')
+    statevar = state
+    eqns = []
+    bounds = {state: mod}
+    # rerun LCG generator with an unknown initial state
+    for i in range(nout):
+        state = (state * a + b)
+        # ti are unknown low-order bits
+        ti = var('t%d' % i)
+        bounds[ti] = (1 << shift)
+        eqns.append((state - ti == (output[i] << shift), mod))
+    # this equation is *underdetermined* because of the ti's,
+    # but because they're bounded, this is still solvable
+    solution = solve_linear_mod(eqns, bounds)
+    assert solution[statevar] % mod == ostate
