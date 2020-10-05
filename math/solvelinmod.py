@@ -118,14 +118,17 @@ def solve_linear_mod(equations, bounds, means=None):
 
     return res
 
-if __name__ == '__main__':
+def demo_1():
+    ''' DSA with LCG nonces, https://id0-rsa.pub/problem/44/
+
+    We are given P, Q, and G. An LCG was used to generate nonces to sign two messages.
+    Using the fact that the nonces are related, we can recover the signing key. '''
+
     import hashlib
 
     def sha1(x):
         return int(hashlib.sha1(x.encode()).hexdigest(), 16)
 
-
-    ## DSA with LCG nonces, https://id0-rsa.pub/problem/44/
     m1, r1, s1 = (
         sha1("message1"),
         202861689990073510420857440842954393147681706677,
@@ -148,9 +151,18 @@ if __name__ == '__main__':
     ], {x: q, k1: m, k2: m})
     assert solution[x] == 0x29f482f543621c402e2dc2a599c5dde82095bf4f
 
+def demo_2():
+    ''' DSA with nested double-LCG nonces (Tania challenge, DEFCON 2019 Qualifiers)
 
-    ## DEFCON Qualifiers 2019, Tania
-    # Nested double LCG
+    One pair of messages is sufficient to break this scheme (even though you can get more message
+    pairs if you want).
+    '''
+
+    import hashlib
+
+    def sha1(x):
+        return int(hashlib.sha1(x.encode()).hexdigest(), 16)
+
     q = 834233754607844004570804297965577358375283559517
 
     r1 = 339852212809401285169513788469136059609698880879
@@ -183,8 +195,12 @@ if __name__ == '__main__':
 
     assert solution[x] == 207059656384708398671740962281764769375058273661
 
+def demo_3():
+    ''' Solve for the parameters of a bilinear LCG using only a few observed outputs.
 
-    ## Generalization of Samsung CTF Finals 2018 LCG problem
+    This is a generalization from the LCG problem from Samsung CTF Finals 2018.
+    '''
+
     # secret parameters: s0, s1, x, y, z, m
     s0 = 3005423129600575593
     s1 = 7396509365641243733
@@ -202,7 +218,7 @@ if __name__ == '__main__':
     # don't cheat
     del s0, s1, x, y, z, m
 
-    # solve for m
+    # solve for m first
     ds = []
     for i in range(1, 9):
         # remove z: ds[i] = x*ds[i-1] + y*d[i-2]
@@ -222,7 +238,7 @@ if __name__ == '__main__':
     m = reduce(gcd, ddds)
     assert m == expsoln['m']
 
-    # n.b. we can also solve this using
+    # n.b. we can also solve this challenge using
     # y = -inverse_mod(dds[0], m) * dds[1] % m
     # x = (ds[2] - y*ds[0]) * inverse_mod(ds[1], m) % m
     # z = (ks[2] - ks[1]*x - ks[0]*y) % m
@@ -238,8 +254,9 @@ if __name__ == '__main__':
     assert solution[y] % m == expsoln['y'] % m
     assert solution[z] % m == expsoln['z'] % m
 
+def demo_4():
+    ''' Generic demonstration on how to recover the seed for a truncated LCG. '''
 
-    ## Truncated LCG
     mod = (1 << 32)
     # random a/b parameters
     a = 0xd0ab4379
@@ -270,3 +287,9 @@ if __name__ == '__main__':
     # but because they're bounded, this is still solvable
     solution = solve_linear_mod(eqns, bounds)
     assert solution[statevar] % mod == ostate
+
+if __name__ == '__main__':
+    demo_1()
+    demo_2()
+    demo_3()
+    demo_4()
