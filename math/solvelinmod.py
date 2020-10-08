@@ -4,15 +4,16 @@ import operator
 from functools import reduce
 import warnings
 
-def solve_linear_mod(equations, bounds, means=None):
+def solve_linear_mod(equations, bounds, guesses=None):
     ''' Solve an arbitrary system of modular linear equations over different moduli.
 
     equations: A sequence of (lhs == rhs, M) pairs, where lhs and rhs are expressions and M is the modulus.
     bounds: A dictionary of {var: M} entries, where var is a variable and M is the maximum of that variable (the bound).
         All variables used in the equations must be bounded.
-    means: An *optional* dictionary containing the expected value (mean) of variables.
-        Variables for which an expected value is not specified are assumed to lie uniformly in [0, bound),
-        i.e. they will have a mean of bound/2.
+    guesses: An *optional* dictionary containing an approximation (guess) for each variable.
+        For e.g. uniformly distributed numbers, just use the mean (expected value).
+        Variables for which a guess is not specified are assumed to lie uniformly in [0, bound),
+        i.e. they will have a guess of bound/2.
 
     NOTE: Bounds are *soft*. This function may return solutions above the bounds. If this happens, and the result
     is incorrect, make some bounds smaller and try again.
@@ -32,8 +33,8 @@ def solve_linear_mod(equations, bounds, means=None):
     # which works so long as the solutions are known to be bounded (which is of course the case for modular equations).
 
     vars = list(bounds)
-    if means is None:
-        means = {}
+    if guesses is None:
+        guesses = {}
 
     NR = len(equations)
     NV = len(vars)
@@ -61,7 +62,7 @@ def solve_linear_mod(equations, bounds, means=None):
         # Fill in vars block of B
         B[NR + vi, vi] = scale
         # Fill in "guess" for variable axis - try reducing bounds if the result is wrong
-        Y[NR + vi] = means.get(var, int(bounds[var]) >> 1) * scale
+        Y[NR + vi] = guesses.get(var, int(bounds[var]) >> 1) * scale
 
     # Extract coefficients from equations
     for ri, (rel, m) in enumerate(equations):
