@@ -1,3 +1,14 @@
+'''
+Solve a bounded system of modular linear equations.
+
+(c) 2019-2020 Robert Xiao <nneonneo@gmail.com>
+https://robertxiao.ca
+
+Originally developed in May 2019; updated October 2020
+
+Please mention this software if it helps you solve a challenge!
+'''
+
 from sage.all import *
 import fpylll
 import operator
