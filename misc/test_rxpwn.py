@@ -19,6 +19,11 @@ else:
     _bytes_to_text = lambda s: s
 
 def mkpipefiles():
+    """
+    Create a new pipe object.
+
+    Args:
+    """
     import os
     r, w = os.pipe()
 
@@ -27,9 +32,21 @@ def mkpipefiles():
     return rf, wf
 
 def strip_ansi(s):
+    """
+    Strip leading characters from string.
+
+    Args:
+        s: (array): write your description
+    """
     return re.sub(r'\x1b\[[\d,]*m', '', s)
 
 def tryclose(s):
+    """
+    Try to close the given string.
+
+    Args:
+        s: (todo): write your description
+    """
     try:
         s.close()
     except Exception:
@@ -37,6 +54,12 @@ def tryclose(s):
 
 class OutputCapturingTestCase(unittest.TestCase):
     def setUp(self):
+        """
+        Sets the stdout and stdin stdin.
+
+        Args:
+            self: (todo): write your description
+        """
         # capture stdin, stdout
         self._oldin = sys.stdin
         self._oldout = sys.stdout
@@ -48,6 +71,12 @@ class OutputCapturingTestCase(unittest.TestCase):
         fcntl.fcntl(self.stdout.fileno(), fcntl.F_SETFL, os.O_NONBLOCK)
 
     def tearDown(self):
+        """
+        Tear down the terminal.
+
+        Args:
+            self: (todo): write your description
+        """
         # revert stdin, stdout
         tryclose(self.stdin)
         tryclose(sys.stdin)
@@ -58,6 +87,12 @@ class OutputCapturingTestCase(unittest.TestCase):
 
 class TestRXPwnSockets(OutputCapturingTestCase):
     def setUp(self):
+        """
+        Sets up the socket.
+
+        Args:
+            self: (todo): write your description
+        """
         # setup server socket
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -81,6 +116,12 @@ class TestRXPwnSockets(OutputCapturingTestCase):
         OutputCapturingTestCase.setUp(self)
 
     def tearDown(self):
+        """
+        Close the socket.
+
+        Args:
+            self: (todo): write your description
+        """
         OutputCapturingTestCase.tearDown(self)
 
         # close client socket
@@ -92,6 +133,12 @@ class TestRXPwnSockets(OutputCapturingTestCase):
 
 
     def test_rd_output_echo_escape(self):
+        """
+        Echo the server output.
+
+        Args:
+            self: (todo): write your description
+        """
         instr = b'\x00 \t\nabc123\x80\xff'
         self.server.send(instr)
         res = self.sock.rd(len(instr))
@@ -101,6 +148,12 @@ class TestRXPwnSockets(OutputCapturingTestCase):
         self.assertEqual(output, '\\x00 \\x09\nabc123\\x80\\xff')
 
     def test_rd_output_noecho(self):
+        """
+        Test if noecho socket
+
+        Args:
+            self: (todo): write your description
+        """
         self.sock.echo = False
 
         instr = b'\x00 \t\nabc123\x80\xff'
@@ -118,6 +171,12 @@ class TestRXPwnSockets(OutputCapturingTestCase):
         self.assertEqual(output, 'x')
 
     def test_rd_output_echo_noescape(self):
+        """
+        Test if the number of the socket.
+
+        Args:
+            self: (todo): write your description
+        """
         self.sock.escape = False
 
         instr = b'\x00 \t\nabc123\x80\xff'
@@ -129,23 +188,47 @@ class TestRXPwnSockets(OutputCapturingTestCase):
         self.assertEqual(output, _bytes_to_text(instr))
 
     def test_rd_suffix_int(self):
+        """
+        Test for rtc rtc rtc session.
+
+        Args:
+            self: (todo): write your description
+        """
         self.server.send(b'abcdefghi')
         self.assertEqual(rd(3), b'abc')
         self.assertEqual(rd(4), b'defg')
 
     def test_rd_suffix_bytes(self):
+        """
+        Test if rd : rtype : bytes
+
+        Args:
+            self: (todo): write your description
+        """
         self.server.send(b'abcdefghi')
         self.assertEqual(rd(b'c'), b'abc')
         self.assertEqual(rd(b'ef'), b'def')
         self.assertEqual(rd(bytearray(b'i')), b'ghi')
 
     def test_rd_suffix_re(self):
+        """
+        This method to see if any rdf rdf rdf server.
+
+        Args:
+            self: (todo): write your description
+        """
         self.server.send(b'abcdefghi')
         self.assertEqual(rd(re.compile(b'[cd]')), b'abc')
         self.assertEqual(rd(re.compile(b'.')), b'd')
         self.assertEqual(rd(re.compile(b'i')), b'efghi')
 
     def test_rd_suffix_mixed(self):
+        """
+        This function will return rd : return :
+
+        Args:
+            self: (todo): write your description
+        """
         self.server.send(b'abcdefghijklmnopqrstuvwxyz')
         self.assertEqual(rd(b'c', b'e'), b'abc')
         self.assertEqual(rd(b'i', b'e'), b'de')
@@ -160,6 +243,12 @@ class TestRXPwnSockets(OutputCapturingTestCase):
 
 
     def test_wr_output_echo(self):
+        """
+        Test if the server is instr
+
+        Args:
+            self: (todo): write your description
+        """
         instr = b'\x00 \t\nabc123\x80\xff'
 
         wr(instr)
@@ -170,6 +259,12 @@ class TestRXPwnSockets(OutputCapturingTestCase):
         self.assertEqual(output, '\\x00 \\x09\nabc123\\x80\\xff')
 
     def test_wr_output_noecho(self):
+        """
+        Test if noecho socket
+
+        Args:
+            self: (todo): write your description
+        """
         self.sock.echo = False
 
         instr = b'\x00 \t\nabc123\x80\xff'
@@ -187,6 +282,12 @@ class TestRXPwnSockets(OutputCapturingTestCase):
         self.assertEqual(output, 'x')
 
     def test_wr_output_echo_noescape(self):
+        """
+        Test if the output of the socket.
+
+        Args:
+            self: (todo): write your description
+        """
         self.sock.escape = False
 
         instr = b'\x00 \t\nabc123\x80\xff'
@@ -198,9 +299,22 @@ class TestRXPwnSockets(OutputCapturingTestCase):
         self.assertEqual(output, _bytes_to_text(instr))
 
     def assertServerRecv(self, s):
+        """
+        Asserts that s is ready to the socket.
+
+        Args:
+            self: (todo): write your description
+            s: (todo): write your description
+        """
         self.assertEqual(self.server.recv(len(s)), s)
 
     def test_wr_types(self):
+        """
+        Assigns all types of the types.
+
+        Args:
+            self: (todo): write your description
+        """
         wr(b'1234')
         self.assertServerRecv(b'1234')
 
@@ -217,6 +331,12 @@ class TestRXPwnSockets(OutputCapturingTestCase):
         self.assertServerRecv(b'(1,)')
 
     def test_pr_types(self):
+        """
+        Assigns : py : class : float.
+
+        Args:
+            self: (todo): write your description
+        """
         pr(b'1234')
         self.assertServerRecv(b'1234\n')
 
@@ -233,12 +353,29 @@ class TestRXPwnSockets(OutputCapturingTestCase):
         self.assertServerRecv(b'(1,)\n')
 
     def test_pr_multiple(self):
+        """
+        Assign multiple fields.
+
+        Args:
+            self: (todo): write your description
+        """
         pr(1, b'asd', 'hi')
         self.assertServerRecv(b'1 asd hi\n')
 
     def test_interactive_stdin_close(self):
+        """
+        Test to stdin and stderr.
+
+        Args:
+            self: (todo): write your description
+        """
         ok = [False]
         def _interactive_thread():
+            """
+            Interactive thread.
+
+            Args:
+            """
             interactive()
             ok[0] = True
 
@@ -252,8 +389,19 @@ class TestRXPwnSockets(OutputCapturingTestCase):
             '*** Exiting interactive mode ***\n')
 
     def test_interactive_server_close(self):
+        """
+        Interactive server.
+
+        Args:
+            self: (todo): write your description
+        """
         ok = [False]
         def _interactive_thread():
+            """
+            Interactive thread.
+
+            Args:
+            """
             interactive()
             ok[0] = True
 
@@ -267,8 +415,19 @@ class TestRXPwnSockets(OutputCapturingTestCase):
             '*** Connection closed by remote host ***\n')
 
     def test_interactive_basic(self):
+        """
+        Test if the server.
+
+        Args:
+            self: (todo): write your description
+        """
         ok = [False]
         def _interactive_thread():
+            """
+            Interactive thread.
+
+            Args:
+            """
             interactive()
             ok[0] = True
 
@@ -290,6 +449,12 @@ class TestRXPwnSockets(OutputCapturingTestCase):
             '*** Exiting interactive mode ***\n')
 
     def test_rd_partial(self):
+        """
+        Test if the connection.
+
+        Args:
+            self: (todo): write your description
+        """
         self.server.send(b'test')
         self.server.shutdown(socket.SHUT_WR)
         with self.assertRaises(rxpwn.PartialReadError) as ecm:
@@ -297,6 +462,12 @@ class TestRXPwnSockets(OutputCapturingTestCase):
         self.assertEqual(ecm.exception.data, b'test')
 
     def test_rd_oserror(self):
+        """
+        Test if the rqual socket. rdf.
+
+        Args:
+            self: (todo): write your description
+        """
         self.sock.sock.setblocking(0)
         self.server.send(b'test')
         with self.assertRaises(rxpwn.PartialReadError) as ecm:
@@ -305,6 +476,12 @@ class TestRXPwnSockets(OutputCapturingTestCase):
 
 class TestRXPwnMisc(OutputCapturingTestCase):
     def test_pause(self):
+        """
+        Disables pause.
+
+        Args:
+            self: (todo): write your description
+        """
         self.stdin.write('\n')
         rxpwn.pause()
         self.assertEqual(strip_ansi(self.stdout.read()), 'Pausing...')
@@ -327,11 +504,23 @@ class TestRXPwnMisc(OutputCapturingTestCase):
 
 class TestRXPwnPackUnpack(unittest.TestCase):
     def test_pack(self):
+        """
+        Test for a qpwno.
+
+        Args:
+            self: (todo): write your description
+        """
         self.assertEqual(rxpwn.plQ(0x4142434445464748), b'HGFEDCBA')
         self.assertEqual(rxpwn.pQ(0x4142434445464748), b'HGFEDCBA')
         self.assertEqual(rxpwn.pbQ(0x4142434445464748), b'ABCDEFGH')
 
     def test_unpack(self):
+        """
+        Unpack the equal.
+
+        Args:
+            self: (todo): write your description
+        """
         self.assertEqual(rxpwn.ubQ(b'ABCDEFGH'), 0x4142434445464748)
         self.assertEqual(rxpwn.ulQ(b'HGFEDCBA'), 0x4142434445464748)
         self.assertEqual(rxpwn.uQ(b'HGFEDCBA'), 0x4142434445464748)

@@ -42,12 +42,29 @@ def solve_linear_mod_pk(a, b, p, k):
         yield base + i * basen
 
 def solve_linear_prime_power(a, b, p, k):
+    """
+    Solve the linear equation.
+
+    Args:
+        a: (todo): write your description
+        b: (todo): write your description
+        p: (todo): write your description
+        k: (todo): write your description
+    """
     if p == 2:
         return solve_linear_mod_2k(a, b, k)
     else:
         return solve_linear_mod_pk(a, b, p, k)
 
 def solve_linear(a, b, factors):
+    """
+    Solve linear equation.
+
+    Args:
+        a: (array): write your description
+        b: (array): write your description
+        factors: (dict): write your description
+    """
     gens = []
     if isinstance(factors, dict):
         factors = list(factors.items())
@@ -208,12 +225,31 @@ def solve_quadratic_mod_pk(a, b, c, p, k):
         return
 
 def solve_quadratic_prime_power(a, b, c, p, k):
+    """
+    Solve a power problem.
+
+    Args:
+        a: (todo): write your description
+        b: (todo): write your description
+        c: (todo): write your description
+        p: (todo): write your description
+        k: (todo): write your description
+    """
     if p == 2:
         return solve_quadratic_mod_2k(a, b, c, k)
     else:
         return solve_quadratic_mod_pk(a, b, c, p, k)
 
 def solve_quadratic(a, b, c, factors):
+    """
+    Solve the linear equation.
+
+    Args:
+        a: (array): write your description
+        b: (array): write your description
+        c: (array): write your description
+        factors: (dict): write your description
+    """
     gens = []
     if isinstance(factors, dict):
         factors = list(factors.items())

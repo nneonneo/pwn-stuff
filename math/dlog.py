@@ -2,6 +2,12 @@ from Crypto.Util import number
 from functools import reduce
 
 def isqrt(n):
+    """
+    Returns true if n is a number of ny.
+
+    Args:
+        n: (array): write your description
+    """
     x = n
     y = (x + 1) // 2
     while y < x:
@@ -11,6 +17,15 @@ def isqrt(n):
 
 class FastDlog(object):
     def __init__(self, g, maxe, p):
+        """
+        Initialize the j - value
+
+        Args:
+            self: (todo): write your description
+            g: (int): write your description
+            maxe: (int): write your description
+            p: (int): write your description
+        """
         lookup = {}
 
         a = isqrt(maxe)+1
@@ -109,6 +124,11 @@ def pohlig_hellman(g, y, p, factors):
     return chinese_remainder(ni, xi)
 
 def run_tests():
+    """
+    Run cwlig30man - ) solver.
+
+    Args:
+    """
     if 1:
         # Test prime power modulus
         a = 2

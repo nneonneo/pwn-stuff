@@ -10,17 +10,43 @@ import pickle
 class F(object):
     ''' Wrap a built-in or imported function '''
     def __init__(self, f):
+        """
+        Initialize a function f.
+
+        Args:
+            self: (todo): write your description
+            f: (int): write your description
+        """
         self.f = f
         self.args = None
     def __call__(self, *args):
+        """
+        Calls the call with args.
+
+        Args:
+            self: (todo): write your description
+        """
         if self.args is not None:
             # called again, create new wrapper
             return F(self)(*args)
         self.args = args
         return self
     def __getattr__(self, key):
+        """
+        Return the value of the given attribute.
+
+        Args:
+            self: (todo): write your description
+            key: (str): write your description
+        """
         return F(getattr)(self, key)
     def __reduce__(self):
+        """
+        Reduce the function callable.
+
+        Args:
+            self: (todo): write your description
+        """
         assert self.args is not None, "F instance must be called!"
         return (self.f, self.args)
 for meth in ['__getitem__', '__setitem__', '__delitem__', '__add__', '__mul__', '__divmod__']:
@@ -32,6 +58,12 @@ class DummyModuleLoader:
 
     @classmethod
     def remove_all(cls):
+        """
+        Remove all loaded modules.
+
+        Args:
+            cls: (todo): write your description
+        """
         for m in cls.dummy_modules:
             del sys.modules[m]
         del cls.dummy_modules[:]
@@ -39,12 +71,27 @@ class DummyModuleLoader:
 
     @classmethod
     def find_module(cls, fullname, path=None):
+        """
+        Find a module by name.
+
+        Args:
+            cls: (todo): write your description
+            fullname: (str): write your description
+            path: (list): write your description
+        """
         if fullname == cls.want_load or cls.is_package(fullname):
             cls.dummy_modules.append(fullname)
             return cls
 
     @classmethod
     def is_package(cls, fullname):
+        """
+        Determine if a package.
+
+        Args:
+            cls: (todo): write your description
+            fullname: (str): write your description
+        """
         if cls.want_load is None:
             return False
         want = cls.want_load.split('.')
@@ -55,6 +102,13 @@ class DummyModuleLoader:
 
     @classmethod
     def load_module(cls, fullname):
+        """
+        Load a module.
+
+        Args:
+            cls: (todo): write your description
+            fullname: (str): write your description
+        """
         ispkg = cls.is_package(fullname)
         mod = sys.modules.setdefault(fullname, imp.new_module(fullname))
         mod.__file__ = "dummy"
@@ -79,6 +133,11 @@ def M(m, f):
 
     if not hasattr(sys.modules[m], f):
         def dummy_function(*args):
+            """
+            Dummy function.
+
+            Args:
+            """
             print("%s.%s(%s) called" % (m, f, ', '.join(map(str, args))))
         dummy_function.__module__ = m
         dummy_function.__name__ = f
@@ -88,6 +147,12 @@ def M(m, f):
     return F(getattr(sys.modules[m], f))
 
 def test(obj):
+    """
+    Test if pickle is a pickled.
+
+    Args:
+        obj: (todo): write your description
+    """
     p = pickle.dumps(obj)
     DummyModuleLoader.remove_all()
     return pickle.loads(p)
