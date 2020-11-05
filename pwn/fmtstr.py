@@ -11,6 +11,12 @@ def pack_printf_32(fmt, addrs, buf_offset=0):
     addr_start = (len(fmt) + buf_offset + 3) // 4
     addr_index = [addr_start + 1]
     def replace(m):
+        """
+        Replace address with address.
+
+        Args:
+            m: (array): write your description
+        """
         res = '%%%d$' % addr_index[0]
         addr_index[0] += 1
         return res
@@ -28,6 +34,12 @@ def pack_printf_64(fmt, addrs, buf_offset=0):
     addr_start = (len(fmt) + buf_offset + 7) // 8
     addr_index = [addr_start + 1]
     def replace(m):
+        """
+        Replace address with address.
+
+        Args:
+            m: (array): write your description
+        """
         res = '%%%d$' % addr_index[0]
         addr_index[0] += 1
         return res

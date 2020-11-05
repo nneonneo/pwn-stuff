@@ -1,11 +1,25 @@
 # Super CRT: handle non-pairwise-coprime inputs
 
 def gcd(a, b):
+    """
+    Returns the greatest common divisor between two numbers.
+
+    Args:
+        a: (int): write your description
+        b: (int): write your description
+    """
     while b:      
         a, b = b, a % b
     return a
 
 def egcd(a, b):
+    """
+    Egcdcdcdcd of two points.
+
+    Args:
+        a: (int): write your description
+        b: (int): write your description
+    """
     x0, x1, y0, y1 = 1, 0, 0, 1
     while b:
         q, a, b = a // b, b, a % b
@@ -14,6 +28,13 @@ def egcd(a, b):
     return a, x0, y0
 
 def modinv(a, n):
+    """
+    Returns the modulo modulo modulo modulo modulus.
+
+    Args:
+        a: (int): write your description
+        n: (int): write your description
+    """
     g, x, _ = egcd(a, n)
     if g == 1:
         return x % n

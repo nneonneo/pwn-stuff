@@ -3,6 +3,12 @@ import sys
 import argparse
 
 def make_escape_dict(s):
+    """
+    Make a dictionary with special characters are escaped.
+
+    Args:
+        s: (todo): write your description
+    """
     known = {'a':'\a', 'b':'\b', 'f':'\f', 'n':'\n', 'r':'\r', 't':'\t', 'v':'\v'}
     return {known.get(c, c): '\\'+c for c in s}
 
@@ -23,6 +29,13 @@ dialect_defaults = dict(
 
 class Dialect:
     def __init__(self, base=None, **kwargs):
+        """
+        Initialize a new dialect.
+
+        Args:
+            self: (todo): write your description
+            base: (float): write your description
+        """
         if base is None:
             for k in dialect_defaults:
                 setattr(self, k, dialect_defaults[k])
@@ -47,10 +60,25 @@ java_dialect = Dialect(quote_char='"', per_line_quotes=True, line_continuation='
 
 class LineEncoder:
     def __init__(self, dialect):
+        """
+        Initialize the dialect.
+
+        Args:
+            self: (todo): write your description
+            dialect: (str): write your description
+        """
         self.dialect = dialect
         self.prevhex = False # was the previous character encoded as a continuable hex escape? (Only if hex_continues is True)
 
     def encode(self, c, nextc):
+        """
+        Encode the next character.
+
+        Args:
+            self: (todo): write your description
+            c: (todo): write your description
+            nextc: (todo): write your description
+        """
         if c in self.dialect.standard_escapes:
             self.prevhex = False
             return self.dialect.standard_escapes[c]
@@ -81,6 +109,15 @@ class LineEncoder:
             raise Exception("Cannot encode character %r" % c)
 
 def encode_file(f, dialect, input_width=None, line_width=None):
+    """
+    Encode a file - like object.
+
+    Args:
+        f: (todo): write your description
+        dialect: (str): write your description
+        input_width: (int): write your description
+        line_width: (int): write your description
+    """
     input_width = input_width or 1<<63
     line_width = line_width or 1<<63
     c = f.read(1)
@@ -150,6 +187,12 @@ def encode_java(s, input_width=None, line_width=None):
     return java_join(lines)
 
 def parse_args(argv):
+    """
+    Parse command line arguments.
+
+    Args:
+        argv: (list): write your description
+    """
     parser = argparse.ArgumentParser('Encode a file as a backslash-escaped string.')
     parser.add_argument('-w', '--input-width', type=int, metavar='WIDTH', help="Encode no more than WIDTH bytes in each line")
     parser.add_argument('-W', '--output-width', type=int, metavar='WIDTH', help="Limit output lines to no more than WIDTH characters")
@@ -158,6 +201,12 @@ def parse_args(argv):
     return parser.parse_args(argv)
 
 def main(argv):
+    """
+    Main function.
+
+    Args:
+        argv: (str): write your description
+    """
     args = parse_args(argv)
 
     if args.file:

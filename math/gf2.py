@@ -2,12 +2,31 @@ import random
 import itertools
 
 def num2vec(x, w):
+    """
+    Convert a vector to a vector.
+
+    Args:
+        x: (int): write your description
+        w: (int): write your description
+    """
     return [int(c == '1') for c in '{:0{w}b}'.format(x, w=w)]
 
 def vec2num(x):
+    """
+    Return the number of vectors in x.
+
+    Args:
+        x: (array): write your description
+    """
     return sum(xi << i for i, xi in enumerate(reversed(x)))
 
 def transpose(A):
+    """
+    Transpose a matrix into - 1.
+
+    Args:
+        A: (array): write your description
+    """
     return [[A[i][j] for i in range(len(A))] for j in range(len(A[0]))]
 
 def solve_gf2(A, b):
@@ -80,10 +99,23 @@ if __name__ == '__main__':
     target = 0xdeadbeef
 
     def crc32(x):
+        """
+        Compute the crc of - byte string
+
+        Args:
+            x: (int): write your description
+        """
         import zlib
         return zlib.crc32(x) & 0xffffffff
 
     def xorstr(x, y):
+        """
+        Xorstr ( x yor ) to bytes.
+
+        Args:
+            x: (todo): write your description
+            y: (todo): write your description
+        """
         return bytes(cx ^ cy for cx, cy in zip(x, y))
 
     input = []

@@ -139,6 +139,12 @@ def demo_1():
     import hashlib
 
     def sha1(x):
+        """
+        Return the sha1 hash of a string.
+
+        Args:
+            x: (todo): write your description
+        """
         return int(hashlib.sha1(x.encode()).hexdigest(), 16)
 
     m1, r1, s1 = (
@@ -173,6 +179,12 @@ def demo_2():
     import hashlib
 
     def sha1(x):
+        """
+        Return the sha1 hash of a string.
+
+        Args:
+            x: (todo): write your description
+        """
         return int(hashlib.sha1(x.encode()).hexdigest(), 16)
 
     q = 834233754607844004570804297965577358375283559517

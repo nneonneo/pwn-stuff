@@ -4,6 +4,12 @@
 #  to reflect your actual PoW: prefix/postfix, hash function, and success condition).
 
 def _solve_challenge_worker(arg):
+    """
+    Solve a worker with a worker.
+
+    Args:
+        arg: (todo): write your description
+    """
     from hashlib import sha256
     from itertools import product
 

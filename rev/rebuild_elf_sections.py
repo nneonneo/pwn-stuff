@@ -249,10 +249,24 @@ class Elf64_Dyn(Structure):
     ]
 
 def print_struct(s):
+    """
+    Print the struct of a struct.
+
+    Args:
+        s: (todo): write your description
+    """
     for name, _ in type(s)._fields_:
         print('  %s = %s' % (name, getattr(s, name)))
 
 def readstruct(fmt, m, pos):
+    """
+    Reads a struct from the stream.
+
+    Args:
+        fmt: (str): write your description
+        m: (todo): write your description
+        pos: (int): write your description
+    """
     return struct.unpack(fmt, m[pos:pos+struct.calcsize(fmt)].tobytes())
 
 def remove_intervals(intervals, segments):
@@ -323,12 +337,24 @@ def reconstruct_sections(m, end):
             p_loads.append(phdr)
 
     def phdr_from_addr(addr):
+        """
+        Given an address from a phdr from an address
+
+        Args:
+            addr: (str): write your description
+        """
         for phdr in p_loads:
             if phdr.p_vaddr <= addr < phdr.p_vaddr+phdr.p_memsz:
                 return phdr
         raise ValueError("addr {:08x} not contained within a phdr!".format(addr))
 
     def addr_to_offset(addr):
+        """
+        Convert address to address to an address.
+
+        Args:
+            addr: (str): write your description
+        """
         phdr = phdr_from_addr(addr)
         return addr - phdr.p_vaddr + phdr.p_offset
 
@@ -524,6 +550,15 @@ def reconstruct_sections(m, end):
     robss_ivals = remove_intervals(robss_ivals, section_ivals)
 
     def create_sections(ivals, prefix, type, flags):
+        """
+        Create a list of a section.
+
+        Args:
+            ivals: (str): write your description
+            prefix: (str): write your description
+            type: (str): write your description
+            flags: (str): write your description
+        """
         tmp_sections = []
 
         max_len = 0
@@ -591,6 +626,12 @@ def reconstruct_sections(m, end):
     m[offs:offs+size] = ''.join(strs).encode()
 
 def parse_args(argv):
+    """
+    Parse command line arguments.
+
+    Args:
+        argv: (list): write your description
+    """
     import argparse
     parser = argparse.ArgumentParser(description="Recreate the section table for an ELF file")
     parser.add_argument('infile', help="Input file", type=argparse.FileType('rb'))
@@ -600,6 +641,12 @@ def parse_args(argv):
     return args
 
 def main(argv):
+    """
+    Main function.
+
+    Args:
+        argv: (str): write your description
+    """
     args = parse_args(argv)
 
     args.outfile.write(args.infile.read())

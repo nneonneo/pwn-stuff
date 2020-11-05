@@ -45,6 +45,12 @@ _printable_bytes = {ord(c.encode()) for c in string.printable if (not c.isspace(
 _PY3 = sys.version_info >= (3,)
 
 def _byteize(x):
+    """
+    Byte - > bytes object
+
+    Args:
+        x: (todo): write your description
+    """
     if isinstance(x, (bytes, bytearray)):
         return bytes(x)
     return str(x).encode('latin1')
@@ -67,12 +73,23 @@ _ANSI_UNDERLINE_OFF = '\x1b[24m'
 
 @contextmanager
 def _ansi_color(color):
+    """
+    Context manager to stdout.
+
+    Args:
+        color: (str): write your description
+    """
     sys.stdout.write(color)
     yield
     sys.stdout.write(_ANSI_COLOR_DEFAULT)
 
 @contextmanager
 def _ansi_underline():
+    """
+    A context manager to stdout to stdout.
+
+    Args:
+    """
     sys.stdout.write(_ANSI_UNDERLINE_ON)
     yield
     sys.stdout.write(_ANSI_UNDERLINE_OFF)
@@ -82,17 +99,37 @@ RE = re.compile
 
 class PartialReadError(IOError):
     def __init__(self, data, exc):
+        """
+        Initialize the object.
+
+        Args:
+            self: (todo): write your description
+            data: (todo): write your description
+            exc: (todo): write your description
+        """
         IOError.__init__(self, getattr(exc, 'errno', None), getattr(exc, 'strerror', None))
         self.args = (data, exc)
         self.data = data
         self.__cause__ = exc
 
     def __str__(self):
+        """
+        Returns a human - like str
+
+        Args:
+            self: (todo): write your description
+        """
         causestr = str(self.__cause__)
         if causestr:
             causestr = ": " + causestr
         return '%r (%s%s)' % (self.data, type(self.__cause__).__name__, causestr)
     def __repr__(self):
+        """
+        Return a repr representation of - repr string.
+
+        Args:
+            self: (todo): write your description
+        """
         return '%s%r' % (type(self).__name__, self.args)
 
 ## Socket stuff
@@ -132,6 +169,12 @@ class Socket:
                     sys.stdout.write('\\x%02x' % c)
 
     def close(self):
+        """
+        Close the socket.
+
+        Args:
+            self: (todo): write your description
+        """
         try:
             self.sock.shutdown(socket.SHUT_RDWR)
         except Exception:
@@ -141,15 +184,42 @@ class Socket:
 
     # Compatibility functions for regular sockets
     def shutdown(self, how):
+        """
+        Shutdown the socket.
+
+        Args:
+            self: (todo): write your description
+            how: (str): write your description
+        """
         self.sock.shutdown(how)
 
     def fileno(self):
+        """
+        Returns a : class : query.
+
+        Args:
+            self: (todo): write your description
+        """
         return self.sock.fileno()
 
     def recv(self, n):
+        """
+        Receive at most n bytes from the queue.
+
+        Args:
+            self: (todo): write your description
+            n: (todo): write your description
+        """
         return self.rd(n)
 
     def send(self, x):
+        """
+        Send x to the message.
+
+        Args:
+            self: (todo): write your description
+            x: (str): write your description
+        """
         return self.wr(x)
 
     def rd(self, *suffixes, **kwargs):
@@ -239,33 +309,74 @@ class Socket:
                 self.sock.send(_byteize(res))
 
 def SSLSocket(addr, *args, **kwargs):
+    """
+    Wrap a socket.
+
+    Args:
+        addr: (str): write your description
+    """
     from ssl import wrap_socket
     return Socket(wrap_socket(socket.create_connection(addr)), *args, **kwargs)
 
 def rd(*args, **kwargs):
+    """
+    Convenvenio.
+
+    Args:
+    """
     return Socket._last_socket.rd(*args, **kwargs)
 
 def pr(*args, **kwargs):
+    """
+    Return a prop - safe version of the socket.
+
+    Args:
+    """
     return Socket._last_socket.pr(*args, **kwargs)
 
 def wr(*args, **kwargs):
+    """
+    Send a socket to the socket.
+
+    Args:
+    """
     return Socket._last_socket.wr(*args, **kwargs)
 
 def interactive(*args, **kwargs):
+    """
+    Wrap a socket.
+
+    Args:
+    """
     return Socket._last_socket.interactive(*args, **kwargs)
 
 ## Misc
 def pause():
+    """
+    Pause ansi color.
+
+    Args:
+    """
     with _ansi_color(_ANSI_COLOR_RED):
         _str_input("Pausing...")
 
 def log(*args, **kwargs):
+    """
+    Prints a message to the console.
+
+    Args:
+    """
     with _ansi_color(_ANSI_COLOR_YELLOW):
         print('[+]', end=' ')
         print(*args, end='', **kwargs)
     print()
 
 def err(*args, **kwargs):
+    """
+    Print an error message.
+
+    Args:
+    """
     with _ansi_color(_ANSI_COLOR_RED):
         print('[-]', end=' ')
         print(*args, end='', **kwargs)
@@ -273,14 +384,41 @@ def err(*args, **kwargs):
 
 ## Pack/unpack
 def _genpack(name, endian, ch):
+    """
+    Generate a packer for the given name.
+
+    Args:
+        name: (str): write your description
+        endian: (todo): write your description
+        ch: (todo): write your description
+    """
     def packer(*args):
+        """
+        Pack the given packet to the arguments.
+
+        Args:
+        """
         return pack(endian + str(len(args)) + ch, *args)
     packer.__name__ = name
     return packer
 
 def _genunpack(name, endian, ch):
+    """
+    Unpack a chunk.
+
+    Args:
+        name: (str): write your description
+        endian: (todo): write your description
+        ch: (todo): write your description
+    """
     sz = calcsize(ch)
     def unpacker(data):
+        """
+        Unpack a binary message.
+
+        Args:
+            data: (array): write your description
+        """
         if len(data) % sz != 0:
             raise ValueError("buffer size is not a multiple of %d" % sz)
         res = unpack(endian + str(len(data)//sz) + ch, data)
@@ -292,6 +430,11 @@ def _genunpack(name, endian, ch):
     return unpacker
 
 def _init_pack_funcs():
+    """
+    Initialize the functions for the functions.
+
+    Args:
+    """
     for ch in 'bBhHiIqQfd':
         for endian, endianch in [('<',''), ('<','l'), ('>','b'), ('@','n')]:
             name = endianch + ch
