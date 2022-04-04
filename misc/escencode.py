@@ -44,6 +44,7 @@ ruby_dialect = Dialect(quote_char='"', line_continuation='\\', standard_escapes=
 echo_dialect = Dialect(quote_char="'", per_line_quotes=True, line_prefix="echo -ne ", force_encode="'", oct_leading_zero=True)
 js_dialect = Dialect(quote_char="'", oct_escape=False, standard_escapes=make_escape_dict('bfnrt\\')) # JS is deprecating octal escapes
 java_dialect = Dialect(quote_char='"', per_line_quotes=True, line_continuation='+', hex_escape=False, standard_escapes=make_escape_dict('bfnrt\\')) # Java doesn't have hex escapes at all!
+allhex_dialect = Dialect(quote_char='"', per_line_quotes=True, line_continuation='', hex_escape=True, oct_escape=False, standard_escapes={}, force_encode="".join(map(chr, range(256))))
 
 class LineEncoder:
     def __init__(self, dialect):
@@ -153,7 +154,7 @@ def parse_args(argv):
     parser = argparse.ArgumentParser('Encode a file as a backslash-escaped string.')
     parser.add_argument('-w', '--input-width', type=int, metavar='WIDTH', help="Encode no more than WIDTH bytes in each line")
     parser.add_argument('-W', '--output-width', type=int, metavar='WIDTH', help="Limit output lines to no more than WIDTH characters")
-    parser.add_argument('-s', '--style', choices=('c', 'echo', 'python', 'js', 'java', 'ruby'), default='python', help="Output style/language")
+    parser.add_argument('-s', '--style', choices=('c', 'echo', 'python', 'js', 'java', 'ruby', 'allhex'), default='python', help="Output style/language")
     parser.add_argument('file', nargs='?', help="Input file; if not specified, read from stdin.")
     return parser.parse_args(argv)
 
