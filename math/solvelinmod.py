@@ -15,7 +15,7 @@ import operator
 from functools import reduce
 import warnings
 
-def solve_linear_mod(equations, bounds, guesses=None):
+def solve_linear_mod(equations, bounds, guesses=None, **lll_args):
     ''' Solve an arbitrary system of modular linear equations over different moduli.
 
     equations: A sequence of (lhs == rhs, M) pairs, where lhs and rhs are expressions and M is the modulus.
@@ -25,6 +25,7 @@ def solve_linear_mod(equations, bounds, guesses=None):
         For e.g. uniformly distributed numbers, just use the mean (expected value).
         Variables for which a guess is not specified are assumed to lie uniformly in [0, bound),
         i.e. they will have a guess of bound/2.
+    lll_args: Additional arguments passed to fpylll.LLL.reduction, for advanced usage.
 
     NOTE: Bounds are *soft*. This function may return solutions above the bounds. If this happens, and the result
     is incorrect, make some bounds smaller and try again.
@@ -113,7 +114,7 @@ def solve_linear_mod(equations, bounds, guesses=None):
 
     # Note that CVP requires LLL to be run first, and that LLL/CVP use the rows as the basis
     Bt = B.transpose()
-    lll = fpylll.LLL.reduction(Bt)
+    fpylll.LLL.reduction(Bt, **lll_args)
     result = fpylll.CVP.closest_vector(Bt, Y)
 
     # Check result for sanity
@@ -161,6 +162,7 @@ def demo_1():
         (-r2*x + s2*k2 == m2, q),
         (k2 == a*k1 + c, m)
     ], {x: q, k1: m, k2: m})
+    print(solution)
     assert solution[x] == 0x29f482f543621c402e2dc2a599c5dde82095bf4f
 
 def demo_2():
@@ -205,6 +207,7 @@ def demo_2():
         (k2 == t1*C1 + t2*C2 + BB, M),
     ], {x: q, k1: M, k2: M, t1: M1, t2: M2})
 
+    print(solution)
     assert solution[x] == 207059656384708398671740962281764769375058273661
 
 def demo_3():
@@ -262,6 +265,7 @@ def demo_3():
         eqns.append((ks[i] == x*ks[i-1] + y*ks[i-2] + z, m))
 
     solution = solve_linear_mod(eqns, bounds)
+    print(solution)
     assert solution[x] % m == expsoln['x'] % m
     assert solution[y] % m == expsoln['y'] % m
     assert solution[z] % m == expsoln['z'] % m
@@ -298,6 +302,7 @@ def demo_4():
     # this equation is *underdetermined* because of the ti's,
     # but because they're bounded, this is still solvable
     solution = solve_linear_mod(eqns, bounds)
+    print(solution)
     assert solution[statevar] % mod == ostate
 
 if __name__ == '__main__':
