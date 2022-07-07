@@ -14,69 +14,11 @@ import fpylll
 import operator
 from functools import reduce
 import warnings
+from typing import List, Tuple
 
-def solve_linear_mod(equations, bounds, guesses=None, **lll_args):
-    ''' Solve an arbitrary system of modular linear equations over different moduli.
+def _process_linear_equations(equations, vars, bounds, guesses) -> List[Tuple[List[int], int, int]]:
+    result = []
 
-    equations: A sequence of (lhs == rhs, M) pairs, where lhs and rhs are expressions and M is the modulus.
-    bounds: A dictionary of {var: M} entries, where var is a variable and M is the maximum of that variable (the bound).
-        All variables used in the equations must be bounded.
-    guesses: An *optional* dictionary containing an approximation (guess) for each variable.
-        For e.g. uniformly distributed numbers, just use the mean (expected value).
-        Variables for which a guess is not specified are assumed to lie uniformly in [0, bound),
-        i.e. they will have a guess of bound/2.
-    lll_args: Additional arguments passed to fpylll.LLL.reduction, for advanced usage.
-
-    NOTE: Bounds are *soft*. This function may return solutions above the bounds. If this happens, and the result
-    is incorrect, make some bounds smaller and try again.
-
-    >>> k = var('k')
-    >>> # solve CRT
-    >>> solve_linear_mod([(k == 2, 3), (k == 4, 5), (k == 3, 7)], {k: 3*5*7})
-    {k: 59}
-
-    >>> x,y = var('x,y')
-    >>> solve_linear_mod([(2*x + 3*y == 7, 11), (3*x + 5*y == 3, 13), (2*x + 5*y == 6, 143)], {x: 143, y: 143})
-    {x: 62, y: 5}
-    '''
-
-    # The general idea is to set up an integer matrix equation Ax=y by introducing extra variables for the quotients,
-    # then use LLL to solve the equation. We introduce extra axes in the lattice to observe the actual solution x,
-    # which works so long as the solutions are known to be bounded (which is of course the case for modular equations).
-
-    vars = list(bounds)
-    if guesses is None:
-        guesses = {}
-
-    NR = len(equations)
-    NV = len(vars)
-    B = fpylll.IntegerMatrix(NR+NV, NR+NV)
-    Y = [None] * (NR + NV)
-
-    # B format (columns are the basis for the lattice):
-    # [ eqns:NRxNV mods:NRxNR
-    #   vars:NVxNV 0 ]
-    # eqns correspond to equation axes, fi(...) = yi mod mi
-    # vars correspond to variable axes, which effectively "observe" elements of the solution vector (x in Ax=y)
-
-    # Compute scale such that the variable axes can't interfere with the equation axes
-    nS = 1
-    for var in vars:
-        nS = max(nS, int(bounds[var]).bit_length())
-    # NR + NV is a fudge to make CVP return correct results despite the 2^(n/2) error bound
-    S = (1 << (nS + (NR + NV + 1)))
-
-    # Compute per-variable scale such that the variable axes are scaled roughly equally
-    scales = {}
-    for vi, var in enumerate(vars):
-        scale = S >> (int(bounds[var]).bit_length())
-        scales[var] = scale
-        # Fill in vars block of B
-        B[NR + vi, vi] = scale
-        # Fill in "guess" for variable axis - try reducing bounds if the result is wrong
-        Y[NR + vi] = guesses.get(var, int(bounds[var]) >> 1) * scale
-
-    # Extract coefficients from equations
     for ri, (rel, m) in enumerate(equations):
         op = rel.operator()
         if op is not operator.eq:
@@ -98,38 +40,152 @@ def solve_linear_mod(equations, bounds, guesses=None, **lll_args):
             if not coeff.is_integer():
                 raise ValueError('relation %s: coefficient of %s is not an integer' % (rel, var))
 
-            B[ri, vi] = (int(coeff) % m) * S
+            coeffs.append(int(coeff) % m)
 
-        # Fill in mods block of B
-        B[ri, NV + ri] = m * S
-
-        const = expr.subs({var: 0 for var in vars})
+        const = expr.subs({var: guesses[var] for var in vars})
         if not const.is_constant():
             raise ValueError('relation %s: failed to extract constant' % rel)
         if not const.is_integer():
             raise ValueError('relation %s: constant is not integer' % rel)
 
-        # Fill in corresponding equation axes of target Y
-        Y[ri] = (int(-const) % m) * S
+        const = int(const) % m
+
+        result.append((coeffs, const, m))
+
+    return result
+
+
+def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args):
+    ''' Solve an arbitrary system of modular linear equations over different moduli.
+
+    equations: A sequence of (lhs == rhs, M) pairs, where lhs and rhs are expressions and M is the modulus.
+    bounds: A dictionary of {var: M} entries, where var is a variable and M is the maximum of that variable (the bound).
+        All variables used in the equations must be bounded.
+    guesses: An *optional* dictionary containing an approximation (guess) for each variable.
+        For e.g. uniformly distributed numbers, just use the mean (expected value).
+        Variables for which a guess is not specified are assumed to lie uniformly in [0, bound),
+        i.e. they will have a guess of bound/2.
+    verbose: set to True to enable additional output
+    lll_args: Additional arguments passed to fpylll.LLL.reduction, for advanced usage.
+
+    NOTE: Bounds are *soft*. This function may return solutions above the bounds. If this happens, and the result
+    is incorrect, make some bounds smaller and try again.
+
+    Tip: if you get an unwanted solution, try setting `guesses` to that solution to force this function
+    to produce a different solution.
+
+    >>> k = var('k')
+    >>> # solve CRT
+    >>> solve_linear_mod([(k == 2, 3), (k == 4, 5), (k == 3, 7)], {k: 3*5*7})
+    {k: 59}
+
+    >>> x,y = var('x,y')
+    >>> solve_linear_mod([(2*x + 3*y == 7, 11), (3*x + 5*y == 3, 13), (2*x + 5*y == 6, 143)], {x: 143, y: 143})
+    {x: 62, y: 5}
+    '''
+
+    # The general idea is to set up an integer matrix equation Ax=y by introducing extra variables for the quotients,
+    # then use LLL to solve the equation. We introduce extra axes in the lattice to observe the actual solution x,
+    # which works so long as the solutions are known to be bounded (which is of course the case for modular equations).
+    # Scaling factors are configured to generally push the smallest vectors to have zeros for the relations, and to
+    # scale disparate variables to approximately the same base.
+
+    vars = list(bounds)
+    if guesses is None:
+        guesses = {}
+
+    for var in vars:
+        if var not in guesses:
+            guesses[var] = bounds[var] // 2
+
+    # Check entropy heuristic to see if this looks solvable
+    bound_bits = math.log2(int(prod(bounds.values())))
+    mod_bits = math.log2(int(prod(m for rel, m in equations)))
+    if verbose:
+        print(f"verbose: variable entropy: {bound_bits:.2f} bits")
+        print(f"verbose: modulus entropy: {mod_bits:.2f} bits")
+    if bound_bits > mod_bits:
+        print(f"warning: variable entropy exceeds modulus entropy - problem is underconstrained and solutions will likely be wrong")
+
+    # Extract coefficients from equations
+    equation_coeffs = _process_linear_equations(equations, vars, bounds, guesses)
+
+    is_affine = any(const != 0 for coeffs, const, m in equation_coeffs)
+
+    NR = len(equation_coeffs)
+    NV = len(vars)
+    if is_affine:
+        # Add one dummy variable for the constant term.
+        NV += 1
+    B = fpylll.IntegerMatrix(NR+NV, NR+NV)
+
+    # B format (rows are the basis for the lattice):
+    # [ eqns:NVxNR vars:NVxNV
+    #   mods:NRxNR 0 ]
+    # eqns correspond to equation axes, fi(...) = yi mod mi
+    # vars correspond to variable axes, which effectively "observe" elements of the solution vector (x in Ax=y)
+
+    # Compute scale such that the variable axes can't interfere with the equation axes
+    nS = 1
+    for var in vars:
+        nS = max(nS, int(bounds[var]).bit_length())
+    # NR + NV is a fudge to make CVP return correct results despite the 2^(n/2) error bound
+    S = (1 << (nS + (NR + NV + 1)))
+
+    # Compute per-variable scale such that the variable axes are scaled roughly equally
+    scales = {}
+    for vi, var in enumerate(vars):
+        scale = S >> (int(bounds[var]).bit_length())
+        scales[var] = scale
+        # Fill in vars block of B
+        B[vi, NR + vi] = scale
+
+    if is_affine:
+        # Const block: effectively, this is a bound of 1 on the constant term
+        B[NV - 1, NR + NV - 1] = S
+
+    for ri, (coeffs, const, m) in enumerate(equation_coeffs):
+        for vi, c in enumerate(coeffs):
+            B[vi, ri] = c * S
+        if is_affine:
+            B[NV - 1, ri] = const * S
+        B[NV + ri, ri] = m * S
 
     # Note that CVP requires LLL to be run first, and that LLL/CVP use the rows as the basis
-    Bt = B.transpose()
-    fpylll.LLL.reduction(Bt, **lll_args)
-    result = fpylll.CVP.closest_vector(Bt, Y)
+    if verbose:
+        print(f"verbose: matrix before:")
+        print(matrix(B).n())
+    fpylll.LLL.reduction(B)
+    if verbose:
+        print(f"verbose: matrix after:")
+        print(matrix(B).n())
 
-    # Check result for sanity
-    if list(map(int, result[:NR])) != list(map(int, Y[:NR])):
-        raise ValueError("CVP returned an incorrect result: input %s, output %s (try increasing your bounds?)" % (Y, result))
+    for row in B:
+        if any(row[ri] != 0 for i in range(NR)):
+            # invalid solution: some relations are nonzero
+            if verbose:
+                print(f"verbose: skip row", row)
+            continue
 
-    res = {}
-    for vi, var in enumerate(vars):
-        aa = result[NR + vi] // scales[var]
-        bb = result[NR + vi] % scales[var]
-        if bb:
-            warnings.warn("CVP returned suspicious result: %s=%d is not scaled correctly (try adjusting your bounds?)" % (var, result[NR + vi]))
-        res[var] = aa
+        mul = 1
+        if is_affine:
+            # Each row is a potential solution, but some rows may not carry a constant.
+            if row[-1] == -S:
+                mul = -1
+            elif row[-1] == S:
+                mul = 1
+            else:
+                continue
 
-    return res
+        res = {}
+        for vi, var in enumerate(vars):
+            aa = mul * row[NR + vi] // scales[var]
+            bb = mul * row[NR + vi] % scales[var]
+            if bb:
+                warnings.warn("LLL returned suspicious result: %s=%d is not scaled correctly (try adjusting your bounds?)" % (var, row[NR + vi]))
+            res[var] = aa + guesses[var]
+
+        return res
 
 def demo_1():
     ''' DSA with LCG nonces, https://id0-rsa.pub/problem/44/
