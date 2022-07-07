@@ -10,7 +10,6 @@ Please mention this software if it helps you solve a challenge!
 '''
 
 from sage.all import *
-import fpylll
 import operator
 from functools import reduce
 import warnings
@@ -66,7 +65,7 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
         Variables for which a guess is not specified are assumed to lie uniformly in [0, bound),
         i.e. they will have a guess of bound/2.
     verbose: set to True to enable additional output
-    lll_args: Additional arguments passed to fpylll.LLL.reduction, for advanced usage.
+    lll_args: Additional arguments passed to LLL, for advanced usage.
 
     NOTE: Bounds are *soft*. This function may return solutions above the bounds. If this happens, and the result
     is incorrect, make some bounds smaller and try again.
@@ -82,6 +81,11 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
     >>> x,y = var('x,y')
     >>> solve_linear_mod([(2*x + 3*y == 7, 11), (3*x + 5*y == 3, 13), (2*x + 5*y == 6, 143)], {x: 143, y: 143})
     {x: 62, y: 5}
+
+    >>> x,y = var('x,y')
+    >>> # we can also solve homogenous equations, provided the guesses are zeroed
+    >>> solve_linear_mod([(2*x + 5*y == 0, 1337)], {x: 5, y: 5}, guesses={x: 0, y: 0})
+    {x: 5, y: -2}
     '''
 
     # The general idea is to set up an integer matrix equation Ax=y by introducing extra variables for the quotients,
@@ -93,7 +97,6 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
     vars = list(bounds)
     if guesses is None:
         guesses = {}
-
     for var in vars:
         if var not in guesses:
             guesses[var] = bounds[var] // 2
@@ -105,7 +108,7 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
         print(f"verbose: variable entropy: {bound_bits:.2f} bits")
         print(f"verbose: modulus entropy: {mod_bits:.2f} bits")
     if bound_bits > mod_bits:
-        print(f"warning: variable entropy exceeds modulus entropy - problem is underconstrained and solutions will likely be wrong")
+        print(f"warning: variable entropy {bound_bits:.2f} exceeds modulus entropy {mod_bits:.2f}: problem is underconstrained and solutions may be wrong")
 
     # Extract coefficients from equations
     equation_coeffs = _process_linear_equations(equations, vars, bounds, guesses)
@@ -117,73 +120,79 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
     if is_affine:
         # Add one dummy variable for the constant term.
         NV += 1
-    B = fpylll.IntegerMatrix(NR+NV, NR+NV)
+    B = matrix(ZZ, nrows=NR+NV, ncols=NR+NV)
 
     # B format (rows are the basis for the lattice):
-    # [ eqns:NVxNR vars:NVxNV
-    #   mods:NRxNR 0 ]
+    # [ mods:NRxNR 0
+    #   eqns:NVxNR vars:NVxNV ]
     # eqns correspond to equation axes, fi(...) = yi mod mi
     # vars correspond to variable axes, which effectively "observe" elements of the solution vector (x in Ax=y)
+    # mods and vars are diagonal, so this matrix is lower triangular.
 
     # Compute scale such that the variable axes can't interfere with the equation axes
     nS = 1
     for var in vars:
         nS = max(nS, int(bounds[var]).bit_length())
-    # NR + NV is a fudge to make CVP return correct results despite the 2^(n/2) error bound
-    S = (1 << (nS + (NR + NV + 1)))
-
-    # Compute per-variable scale such that the variable axes are scaled roughly equally
-    scales = {}
-    for vi, var in enumerate(vars):
-        scale = S >> (int(bounds[var]).bit_length())
-        scales[var] = scale
-        # Fill in vars block of B
-        B[vi, NR + vi] = scale
-
-    if is_affine:
-        # Const block: effectively, this is a bound of 1 on the constant term
-        B[NV - 1, NR + NV - 1] = S
+    S = 1 << nS
+    col_scales = []
 
     for ri, (coeffs, const, m) in enumerate(equation_coeffs):
         for vi, c in enumerate(coeffs):
-            B[vi, ri] = c * S
+            B[NR + vi, ri] = c
         if is_affine:
-            B[NV - 1, ri] = const * S
-        B[NV + ri, ri] = m * S
+            B[NR + NV - 1, ri] = const
+        col_scales.append(S)
+        B[ri, ri] = m
 
-    # Note that CVP requires LLL to be run first, and that LLL/CVP use the rows as the basis
+    # Compute per-variable scale such that the variable axes are scaled roughly equally
+    for vi, var in enumerate(vars):
+        scale = S >> (int(bounds[var]).bit_length())
+        col_scales.append(scale)
+        # Fill in vars block of B
+        B[NR + vi, NR + vi] = 1
+
+    if is_affine:
+        # Const block: effectively, this is a bound of 1 on the constant term
+        col_scales.append(S)
+        B[NR + NV - 1, -1] = 1
+
     if verbose:
-        print(f"verbose: matrix before:")
-        print(matrix(B).n())
-    fpylll.LLL.reduction(B)
+        print(f"verbose: scaling shifts:", [s.bit_length() - 1 for s in col_scales])
+        print(f"verbose: unscaled matrix before:")
+        print(B.n())
+
+    for i, s in enumerate(col_scales):
+        B[:, i] *= s
+    B = B.LLL(**lll_args)
+    for i, s in enumerate(col_scales):
+        B[:, i] /= s
+
+    # Negate rows for more readable output
+    for i in range(B.nrows()):
+        if sum(x < 0 for x in B[i, :]) > sum(x > 0 for x in B[i, :]):
+            B[i, :] *= -1
+        if is_affine and B[i, -1] < 0:
+            B[i, :] *= -1
+
     if verbose:
-        print(f"verbose: matrix after:")
-        print(matrix(B).n())
+        print(f"verbose: unscaled matrix after:")
+        print(B.n())
 
     for row in B:
         if any(row[ri] != 0 for i in range(NR)):
             # invalid solution: some relations are nonzero
-            if verbose:
-                print(f"verbose: skip row", row)
             continue
 
-        mul = 1
         if is_affine:
             # Each row is a potential solution, but some rows may not carry a constant.
-            if row[-1] == -S:
-                mul = -1
-            elif row[-1] == S:
-                mul = 1
-            else:
+            if row[-1] != 1:
+                if verbose:
+                    print(f"verbose: zero solution", {var: row[NR + vi] for vi, var in enumerate(vars) if row[NR + vi] != 0})
                 continue
 
         res = {}
         for vi, var in enumerate(vars):
-            aa = mul * row[NR + vi] // scales[var]
-            bb = mul * row[NR + vi] % scales[var]
-            if bb:
-                warnings.warn("LLL returned suspicious result: %s=%d is not scaled correctly (try adjusting your bounds?)" % (var, row[NR + vi]))
-            res[var] = aa + guesses[var]
+            res[var] = row[NR + vi] + guesses[var]
 
         return res
 
