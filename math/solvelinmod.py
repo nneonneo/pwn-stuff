@@ -9,10 +9,11 @@ Originally developed in May 2019; updated July 2022
 Please mention this software if it helps you solve a challenge!
 """
 
+import math
 import operator
 from typing import List, Tuple
 
-from sage.all import ZZ, gcd, matrix, var
+from sage.all import ZZ, gcd, matrix, prod, var
 
 
 def _process_linear_equations(equations, vars, bounds, guesses) -> List[Tuple[List[int], int, int]]:
@@ -105,14 +106,20 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
         if var not in guesses:
             guesses[var] = bounds[var] // 2
 
+    bound_bits = math.log2(int(prod(bounds.values())))
+    mod_bits = math.log2(int(prod(m for rel, m in equations)))
+    if verbose:
+        print(f"verbose: variable entropy: {bound_bits:.2f} bits")
+        print(f"verbose: modulus entropy: {mod_bits:.2f} bits")
+
     # Extract coefficients from equations
     equation_coeffs = _process_linear_equations(equations, vars, bounds, guesses)
 
-    is_affine = any(const != 0 for coeffs, const, m in equation_coeffs)
+    is_inhom = any(const != 0 for coeffs, const, m in equation_coeffs)
 
     NR = len(equation_coeffs)
     NV = len(vars)
-    if is_affine:
+    if is_inhom:
         # Add one dummy variable for the constant term.
         NV += 1
     B = matrix(ZZ, NR + NV, NR + NV)
@@ -124,18 +131,24 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
     # vars correspond to variable axes, which effectively "observe" elements of the solution vector (x in Ax=y)
     # mods and vars are diagonal, so this matrix is lower triangular.
 
-    # Compute scale such that the variable axes can't interfere with the equation axes
+    # Compute maximum scale factor over all variables
     nS = 1
     for var in vars:
         nS = max(nS, int(bounds[var]).bit_length())
     S = 1 << nS
+
+    # Compute equation scale such that the bounded solution vector (equation columns all zero)
+    # will be shorter than any vector that has a nonzero equation column
     eqS = S << (NR + NV + 1)
+    # If the equation is underconstrained, add additional scaling to find a solution anyway
+    if bound_bits > mod_bits:
+        eqS <<= int((bound_bits - mod_bits) / NR) + 1
     col_scales = []
 
     for ri, (coeffs, const, m) in enumerate(equation_coeffs):
         for vi, c in enumerate(coeffs):
             B[NR + vi, ri] = c
-        if is_affine:
+        if is_inhom:
             B[NR + NV - 1, ri] = const
         col_scales.append(eqS)
         B[ri, ri] = m
@@ -147,7 +160,7 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
         # Fill in vars block of B
         B[NR + vi, NR + vi] = 1
 
-    if is_affine:
+    if is_inhom:
         # Const block: effectively, this is a bound of 1 on the constant term
         col_scales.append(S)
         B[NR + NV - 1, -1] = 1
@@ -167,7 +180,7 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
     for i in range(B.nrows()):
         if sum(x < 0 for x in B[i, :]) > sum(x > 0 for x in B[i, :]):
             B[i, :] *= -1
-        if is_affine and B[i, -1] < 0:
+        if is_inhom and B[i, -1] < 0:
             B[i, :] *= -1
 
     if verbose:
@@ -179,7 +192,7 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
             # invalid solution: some relations are nonzero
             continue
 
-        if is_affine:
+        if is_inhom:
             # Each row is a potential solution, but some rows may not carry a constant.
             if row[-1] != 1:
                 if verbose:
