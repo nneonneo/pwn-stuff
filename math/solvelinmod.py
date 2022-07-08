@@ -41,6 +41,7 @@ def _process_linear_equations(equations, vars, bounds, guesses) -> List[Tuple[Li
 
             coeffs.append(int(coeff) % m)
 
+        # Shift variables towards their guesses to reduce the (expected) length of the solution vector
         const = expr.subs({var: guesses[var] for var in vars})
         if not const.is_constant():
             raise ValueError('relation %s: failed to extract constant' % rel)
@@ -134,6 +135,7 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
     for var in vars:
         nS = max(nS, int(bounds[var]).bit_length())
     S = 1 << nS
+    eqS = S << (NR + NV + 1)
     col_scales = []
 
     for ri, (coeffs, const, m) in enumerate(equation_coeffs):
@@ -141,7 +143,7 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
             B[NR + vi, ri] = c
         if is_affine:
             B[NR + NV - 1, ri] = const
-        col_scales.append(S)
+        col_scales.append(eqS)
         B[ri, ri] = m
 
     # Compute per-variable scale such that the variable axes are scaled roughly equally
