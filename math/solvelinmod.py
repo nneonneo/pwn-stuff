@@ -74,6 +74,9 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
     Tip: if you get an unwanted solution, try setting `guesses` to that solution to force this function
     to produce a different solution.
 
+    Tip: if your bounds are loose and you just want small solutions, set `guesses` to zero for all
+    loosely-bounded variables.
+
     >>> k = var('k')
     >>> # solve CRT
     >>> solve_linear_mod([(k == 2, 3), (k == 4, 5), (k == 3, 7)], {k: 3*5*7})
@@ -101,15 +104,6 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
     for var in vars:
         if var not in guesses:
             guesses[var] = bounds[var] // 2
-
-    # Check entropy heuristic to see if this looks solvable
-    bound_bits = math.log2(int(prod(bounds.values())))
-    mod_bits = math.log2(int(prod(m for rel, m in equations)))
-    if verbose:
-        print(f"verbose: variable entropy: {bound_bits:.2f} bits")
-        print(f"verbose: modulus entropy: {mod_bits:.2f} bits")
-    if bound_bits > mod_bits:
-        print(f"warning: variable entropy {bound_bits:.2f} exceeds modulus entropy {mod_bits:.2f}: problem is underconstrained and solutions may be wrong")
 
     # Extract coefficients from equations
     equation_coeffs = _process_linear_equations(equations, vars, bounds, guesses)
