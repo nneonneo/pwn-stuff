@@ -1,52 +1,52 @@
-'''
+"""
 Solve a bounded system of modular linear equations.
 
-(c) 2019-2020 Robert Xiao <nneonneo@gmail.com>
+(c) 2019-2022 Robert Xiao <nneonneo@gmail.com>
 https://robertxiao.ca
 
-Originally developed in May 2019; updated October 2020
+Originally developed in May 2019; updated July 2022
 
 Please mention this software if it helps you solve a challenge!
-'''
+"""
 
-from sage.all import *
 import operator
-from functools import reduce
-import warnings
 from typing import List, Tuple
+
+from sage.all import ZZ, gcd, matrix, var
+
 
 def _process_linear_equations(equations, vars, bounds, guesses) -> List[Tuple[List[int], int, int]]:
     result = []
 
-    for ri, (rel, m) in enumerate(equations):
+    for rel, m in equations:
         op = rel.operator()
         if op is not operator.eq:
-            raise TypeError('relation %s: not an equality relation' % rel)
+            raise TypeError(f"relation {rel}: not an equality relation")
 
         expr = (rel - rel.rhs()).lhs().expand()
         for var in expr.variables():
             if var not in bounds:
-                raise ValueError('relation %s: variable %s is not bounded' % (rel, var))
+                raise ValueError(f"relation {rel}: variable {var} is not bounded")
 
         # Fill in eqns block of B
         coeffs = []
-        for vi, var in enumerate(vars):
+        for var in vars:
             if expr.degree(var) >= 2:
-                raise ValueError('relation %s: equation is not linear in %s' % (rel, var))
+                raise ValueError(f"relation {rel}: equation is not linear in {var}")
             coeff = expr.coefficient(var)
             if not coeff.is_constant():
-                raise ValueError('relation %s: coefficient of %s is not constant (equation is not linear)' % (rel, var))
+                raise ValueError(f"relation {rel}: coefficient of {var} is not constant (equation is not linear)")
             if not coeff.is_integer():
-                raise ValueError('relation %s: coefficient of %s is not an integer' % (rel, var))
+                raise ValueError(f"relation {rel}: coefficient of {var} is not an integer")
 
             coeffs.append(int(coeff) % m)
 
         # Shift variables towards their guesses to reduce the (expected) length of the solution vector
         const = expr.subs({var: guesses[var] for var in vars})
         if not const.is_constant():
-            raise ValueError('relation %s: failed to extract constant' % rel)
+            raise ValueError(f"relation {rel}: failed to extract constant")
         if not const.is_integer():
-            raise ValueError('relation %s: constant is not integer' % rel)
+            raise ValueError(f"relation {rel}: constant is not integer")
 
         const = int(const) % m
 
@@ -56,7 +56,7 @@ def _process_linear_equations(equations, vars, bounds, guesses) -> List[Tuple[Li
 
 
 def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args):
-    ''' Solve an arbitrary system of modular linear equations over different moduli.
+    """Solve an arbitrary system of modular linear equations over different moduli.
 
     equations: A sequence of (lhs == rhs, M) pairs, where lhs and rhs are expressions and M is the modulus.
     bounds: A dictionary of {var: M} entries, where var is a variable and M is the maximum of that variable (the bound).
@@ -90,7 +90,7 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
     >>> # we can also solve homogenous equations, provided the guesses are zeroed
     >>> solve_linear_mod([(2*x + 5*y == 0, 1337)], {x: 5, y: 5}, guesses={x: 0, y: 0})
     {x: 5, y: -2}
-    '''
+    """
 
     # The general idea is to set up an integer matrix equation Ax=y by introducing extra variables for the quotients,
     # then use LLL to solve the equation. We introduce extra axes in the lattice to observe the actual solution x,
@@ -115,7 +115,7 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
     if is_affine:
         # Add one dummy variable for the constant term.
         NV += 1
-    B = matrix(ZZ, nrows=NR+NV, ncols=NR+NV)
+    B = matrix(ZZ, NR + NV, NR + NV)
 
     # B format (rows are the basis for the lattice):
     # [ mods:NRxNR 0
@@ -153,8 +153,8 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
         B[NR + NV - 1, -1] = 1
 
     if verbose:
-        print(f"verbose: scaling shifts:", [s.bit_length() - 1 for s in col_scales])
-        print(f"verbose: unscaled matrix before:")
+        print("verbose: scaling shifts:", [s.bit_length() - 1 for s in col_scales])
+        print("verbose: unscaled matrix before:")
         print(B.n())
 
     for i, s in enumerate(col_scales):
@@ -171,11 +171,11 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
             B[i, :] *= -1
 
     if verbose:
-        print(f"verbose: unscaled matrix after:")
+        print("verbose: unscaled matrix after:")
         print(B.n())
 
     for row in B:
-        if any(row[ri] != 0 for i in range(NR)):
+        if any(x != 0 for x in row[:NR]):
             # invalid solution: some relations are nonzero
             continue
 
@@ -183,7 +183,10 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
             # Each row is a potential solution, but some rows may not carry a constant.
             if row[-1] != 1:
                 if verbose:
-                    print(f"verbose: zero solution", {var: row[NR + vi] for vi, var in enumerate(vars) if row[NR + vi] != 0})
+                    print(
+                        "verbose: zero solution",
+                        {var: row[NR + vi] for vi, var in enumerate(vars) if row[NR + vi] != 0},
+                    )
                 continue
 
         res = {}
@@ -192,11 +195,12 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
 
         return res
 
+
 def demo_1():
-    ''' DSA with LCG nonces, https://id0-rsa.pub/problem/44/
+    """DSA with LCG nonces, https://id0-rsa.pub/problem/44/
 
     We are given P, Q, and G. An LCG was used to generate nonces to sign two messages.
-    Using the fact that the nonces are related, we can recover the signing key. '''
+    Using the fact that the nonces are related, we can recover the signing key."""
 
     import hashlib
 
@@ -206,32 +210,36 @@ def demo_1():
     m1, r1, s1 = (
         sha1("message1"),
         202861689990073510420857440842954393147681706677,
-        316598684468735233298185340984928938581112602589
+        316598684468735233298185340984928938581112602589,
     )
     m2, r2, s2 = (
         sha1("message2"),
         43602034738807436825901197549075276008737747591,
-        642028161610139974743754581527505118749777770326
+        642028161610139974743754581527505118749777770326,
     )
-    q = 0x00d5f00a9c48d145920784bfb1a56b1f1f95e7f747
+    q = 0x00D5F00A9C48D145920784BFB1A56B1F1F95E7F747
     a = 545094182407654161786276305190438612396347946877
     c = 106527113109554186270186272440947601748633355206
     m = 983310466739698185049446758331422281214830590642
-    x, k1, k2 = var('x,k1,k2')
-    solution = solve_linear_mod([
-        (-r1*x + s1*k1 == m1, q),
-        (-r2*x + s2*k2 == m2, q),
-        (k2 == a*k1 + c, m)
-    ], {x: q, k1: m, k2: m})
+    x, k1, k2 = var("x,k1,k2")
+    solution = solve_linear_mod(
+        [
+            (-r1 * x + s1 * k1 == m1, q),
+            (-r2 * x + s2 * k2 == m2, q),
+            (k2 == a * k1 + c, m),
+        ],
+        {x: q, k1: m, k2: m},
+    )
     print(solution)
-    assert solution[x] == 0x29f482f543621c402e2dc2a599c5dde82095bf4f
+    assert solution[x] == 0x29F482F543621C402E2DC2A599C5DDE82095BF4F
+
 
 def demo_2():
-    ''' DSA with nested double-LCG nonces (Tania challenge, DEFCON 2019 Qualifiers)
+    """DSA with nested double-LCG nonces (Tania challenge, DEFCON 2019 Qualifiers)
 
     One pair of messages is sufficient to break this scheme (even though you can get more message
     pairs if you want).
-    '''
+    """
 
     import hashlib
 
@@ -259,23 +267,28 @@ def demo_2():
     m1 = sha1("the rules are the rules, no complaints")
     m2 = sha1("reyammer can change the rules")
 
-    x, k1, k2, t1, t2 = var('x,k1,k2,t1,t2')
-    solution = solve_linear_mod([
-        (-r1*x + s1*k1 == m1, q),
-        (-r2*x + s2*k2 == m2, q),
-        (t1 == A1*k1 + B1, M1),
-        (t2 == A2*k1 + B2, M2),
-        (k2 == t1*C1 + t2*C2 + BB, M),
-    ], {x: q, k1: M, k2: M, t1: M1, t2: M2})
+    x, k1, k2, t1, t2 = var("x,k1,k2,t1,t2")
+    solution = solve_linear_mod(
+        [
+            (-r1 * x + s1 * k1 == m1, q),
+            (-r2 * x + s2 * k2 == m2, q),
+            (t1 == A1 * k1 + B1, M1),
+            (t2 == A2 * k1 + B2, M2),
+            (k2 == t1 * C1 + t2 * C2 + BB, M),
+        ],
+        {x: q, k1: M, k2: M, t1: M1, t2: M2},
+    )
 
     print(solution)
     assert solution[x] == 207059656384708398671740962281764769375058273661
 
+
 def demo_3():
-    ''' Solve for the parameters of a bilinear LCG using only a few observed outputs.
+    """Solve for the parameters of a bilinear LCG using only a few observed outputs.
 
     This is a generalization from the LCG problem from Samsung CTF Finals 2018.
-    '''
+    """
+    from functools import reduce
 
     # secret parameters: s0, s1, x, y, z, m
     s0 = 3005423129600575593
@@ -284,11 +297,11 @@ def demo_3():
     y = 5748392989531061213
     z = 15303690528977248313
     m = 15674144604358019630
-    expsoln = {'x': x, 'y': y, 'z': z, 'm': m}
+    expsoln = {"x": x, "y": y, "z": z, "m": m}
 
     ks = []
     for i in range(9):
-        s0, s1 = s1, (x*s1 + y*s0 + z) % m
+        s0, s1 = s1, (x * s1 + y * s0 + z) % m
         ks.append(s1)
 
     # don't cheat
@@ -298,50 +311,51 @@ def demo_3():
     ds = []
     for i in range(1, 9):
         # remove z: ds[i] = x*ds[i-1] + y*d[i-2]
-        ds.append(ks[i] - ks[i-1])
+        ds.append(ks[i] - ks[i - 1])
 
     dds = []
     for i in range(1, 7):
         # remove x: dds[i] = -y*dds[i-1]
-        dds.append(ds[i]*ds[i] - ds[i-1]*ds[i+1])
+        dds.append(ds[i] * ds[i] - ds[i - 1] * ds[i + 1])
 
     ddds = []
     for i in range(1, 5):
         # remove y: ddds[i] = 0 mod m
-        ddds.append(dds[i]*dds[i] - dds[i-1]*dds[i+1])
+        ddds.append(dds[i] * dds[i] - dds[i - 1] * dds[i + 1])
 
     # note: this does not always work - sometimes m' ends up as a multiple of m
     m = reduce(gcd, ddds)
-    assert m == expsoln['m']
+    assert m == expsoln["m"]
 
     # n.b. we can also solve this challenge using
     # y = -inverse_mod(dds[0], m) * dds[1] % m
     # x = (ds[2] - y*ds[0]) * inverse_mod(ds[1], m) % m
     # z = (ks[2] - ks[1]*x - ks[0]*y) % m
 
-    x, y, z = var('x,y,z')
+    x, y, z = var("x,y,z")
     eqns = []
     bounds = {x: m, y: m, z: m}
     for i in range(2, 7):
-        eqns.append((ks[i] == x*ks[i-1] + y*ks[i-2] + z, m))
+        eqns.append((ks[i] == x * ks[i - 1] + y * ks[i - 2] + z, m))
 
     solution = solve_linear_mod(eqns, bounds)
     print(solution)
-    assert solution[x] % m == expsoln['x'] % m
-    assert solution[y] % m == expsoln['y'] % m
-    assert solution[z] % m == expsoln['z'] % m
+    assert solution[x] % m == expsoln["x"] % m
+    assert solution[y] % m == expsoln["y"] % m
+    assert solution[z] % m == expsoln["z"] % m
+
 
 def demo_4():
-    ''' Generic demonstration on how to recover the seed for a truncated LCG. '''
+    """ Generic demonstration on how to recover the seed for a truncated LCG. """
 
-    mod = (1 << 32)
+    mod = 1 << 32
     # random a/b parameters
-    a = 0xd0ab4379
-    b = 0xa34a85d3
+    a = 0xD0AB4379
+    b = 0xA34A85D3
     shift = 20
     nout = 3
     # unknown initial state
-    ostate = state = 0x174c562a
+    ostate = state = 0x174C562A
     # run LCG generator to produce truncated outputs
     output = []
     for i in range(nout):
@@ -349,16 +363,16 @@ def demo_4():
         output.append(state >> shift)
 
     # start solving given output
-    state = var('state')
+    state = var("state")
     statevar = state
     eqns = []
     bounds = {state: mod}
     # rerun LCG generator with an unknown initial state
     for i in range(nout):
-        state = (state * a + b)
+        state = state * a + b
         # ti are unknown low-order bits
-        ti = var('t%d' % i)
-        bounds[ti] = (1 << shift)
+        ti = var("t%d" % i)
+        bounds[ti] = 1 << shift
         eqns.append((state - ti == (output[i] << shift), mod))
     # this equation is *underdetermined* because of the ti's,
     # but because they're bounded, this is still solvable
@@ -366,7 +380,8 @@ def demo_4():
     print(solution)
     assert solution[statevar] % mod == ostate
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     demo_1()
     demo_2()
     demo_3()
