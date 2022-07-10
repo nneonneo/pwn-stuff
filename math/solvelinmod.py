@@ -9,6 +9,7 @@ Originally developed in May 2019; updated July 2022
 Please mention this software if it helps you solve a challenge!
 """
 
+from collections.abc import Sequence
 import math
 import operator
 from typing import List, Tuple
@@ -16,7 +17,7 @@ from typing import List, Tuple
 from sage.all import ZZ, gcd, matrix, prod, var
 
 
-def _process_linear_equations(equations, vars, bounds, guesses) -> List[Tuple[List[int], int, int]]:
+def _process_linear_equations(equations, vars, guesses) -> List[Tuple[List[int], int, int]]:
     result = []
 
     for rel, m in equations:
@@ -26,7 +27,7 @@ def _process_linear_equations(equations, vars, bounds, guesses) -> List[Tuple[Li
 
         expr = (rel - rel.rhs()).lhs().expand()
         for var in expr.variables():
-            if var not in bounds:
+            if var not in vars:
                 raise ValueError(f"relation {rel}: variable {var} is not bounded")
 
         # Fill in eqns block of B
@@ -56,26 +57,26 @@ def _process_linear_equations(equations, vars, bounds, guesses) -> List[Tuple[Li
     return result
 
 
-def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args):
+def solve_linear_mod(equations, bounds, verbose=False, **lll_args):
     """Solve an arbitrary system of modular linear equations over different moduli.
 
     equations: A sequence of (lhs == rhs, M) pairs, where lhs and rhs are expressions and M is the modulus.
-    bounds: A dictionary of {var: M} entries, where var is a variable and M is the maximum of that variable (the bound).
+    bounds: A dictionary of {var: B} entries, where var is a variable and B is the bounds on that variable.
+        Bounds may be specified in one of three ways:
+        - A single integer X: Variable is assumed to be uniformly distributed in [0, X] with an expected value of X/2.
+        - A tuple of integers (X, Y): Variable is assumed to be uniformly distributed in [X, Y] with an expected value of (X + Y)/2.
+        - A tuple of integers (X, E, Y): Variable is assumed to be bounded within [X, Y] with an expected value of E.
         All variables used in the equations must be bounded.
-    guesses: An *optional* dictionary containing an approximation (guess) for each variable.
-        For e.g. uniformly distributed numbers, just use the mean (expected value).
-        Variables for which a guess is not specified are assumed to lie uniformly in [0, bound),
-        i.e. they will have a guess of bound/2.
     verbose: set to True to enable additional output
     lll_args: Additional arguments passed to LLL, for advanced usage.
 
     NOTE: Bounds are *soft*. This function may return solutions above the bounds. If this happens, and the result
-    is incorrect, make some bounds smaller and try again.
+    is incorrect, make some bounds tighter and try again.
 
-    Tip: if you get an unwanted solution, try setting `guesses` to that solution to force this function
+    Tip: if you get an unwanted solution, try setting the expected values to that solution to force this function
     to produce a different solution.
 
-    Tip: if your bounds are loose and you just want small solutions, set `guesses` to zero for all
+    Tip: if your bounds are loose and you just want small solutions, set the expected values to zero for all
     loosely-bounded variables.
 
     >>> k = var('k')
@@ -100,20 +101,35 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
     # scale disparate variables to approximately the same base.
 
     vars = list(bounds)
-    if guesses is None:
-        guesses = {}
+    guesses = {}
+    var_scale = {}
     for var in vars:
-        if var not in guesses:
-            guesses[var] = bounds[var] // 2
+        bound = bounds[var]
+        if isinstance(bound, Sequence):
+            if len(bound) == 2:
+                xmin, xmax = map(int, bound)
+                guess = (xmax - xmin) // 2 + xmin
+            elif len(bound) == 3:
+                xmin, guess, xmax = map(int, bound)
+            else:
+                raise TypeError("Bounds must be integers, 2-tuples or 3-tuples")
+        else:
+            xmin = 0
+            xmax = int(bound)
+            guess = xmax // 2
+        if not xmin <= guess <= xmax:
+            raise ValueError(f"Bound for variable {var} is invalid ({xmin=} {guess=} {xmax=})")
+        var_scale[var] = max(xmax - guess, guess - xmin, 1)
+        guesses[var] = guess
 
-    bound_bits = math.log2(int(prod(bounds.values())))
+    var_bits = math.log2(int(prod(var_scale.values()))) + len(vars)
     mod_bits = math.log2(int(prod(m for rel, m in equations)))
     if verbose:
-        print(f"verbose: variable entropy: {bound_bits:.2f} bits")
+        print(f"verbose: variable entropy: {var_bits:.2f} bits")
         print(f"verbose: modulus entropy: {mod_bits:.2f} bits")
 
     # Extract coefficients from equations
-    equation_coeffs = _process_linear_equations(equations, vars, bounds, guesses)
+    equation_coeffs = _process_linear_equations(equations, vars, guesses)
 
     is_inhom = any(const != 0 for coeffs, const, m in equation_coeffs)
 
@@ -132,17 +148,14 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
     # mods and vars are diagonal, so this matrix is lower triangular.
 
     # Compute maximum scale factor over all variables
-    nS = 1
-    for var in vars:
-        nS = max(nS, int(bounds[var]).bit_length())
-    S = 1 << nS
+    S = max(var_scale.values())
 
     # Compute equation scale such that the bounded solution vector (equation columns all zero)
     # will be shorter than any vector that has a nonzero equation column
     eqS = S << (NR + NV + 1)
     # If the equation is underconstrained, add additional scaling to find a solution anyway
-    if bound_bits > mod_bits:
-        eqS <<= int((bound_bits - mod_bits) / NR) + 1
+    if var_bits > mod_bits:
+        eqS <<= int((var_bits - mod_bits) / NR) + 1
     col_scales = []
 
     for ri, (coeffs, const, m) in enumerate(equation_coeffs):
@@ -155,8 +168,7 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
 
     # Compute per-variable scale such that the variable axes are scaled roughly equally
     for vi, var in enumerate(vars):
-        scale = S >> (int(bounds[var]).bit_length())
-        col_scales.append(scale)
+        col_scales.append(S // var_scale[var])
         # Fill in vars block of B
         B[NR + vi, NR + vi] = 1
 
@@ -166,7 +178,7 @@ def solve_linear_mod(equations, bounds, guesses=None, verbose=False, **lll_args)
         B[NR + NV - 1, -1] = 1
 
     if verbose:
-        print("verbose: scaling shifts:", [s.bit_length() - 1 for s in col_scales])
+        print("verbose: scaling shifts:", [math.log2(int(s)) for s in col_scales])
         print("verbose: unscaled matrix before:")
         print(B.n())
 
