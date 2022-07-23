@@ -1,0 +1,263 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Interactive Polyalphabetic Cipher Solver</title>
+    <script type="text/javascript" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style type="text/css">
+      :root {
+          --bg-color: white;
+          --fg-color: black;
+          --unsolved-fg: #cccccc;
+          --select-bg: #ffe900;
+          --select-fg: black;
+          --solved-bg: #d0efd0;
+          --select-solved-bg: #44ff00;
+          --select-solved-fg: black;
+      }
+
+      @media (prefers-color-scheme: dark) {
+          :root {
+              --bg-color: #121212;
+              --fg-color: white;
+              --unsolved-fg: #777777;
+              --select-bg: #bbbb00;
+              --select-fg: black;
+              --solved-bg: #306630;
+              --select-solved-bg: #77bb00;
+              --select-solved-fg: black;
+          }
+      }
+
+      body {
+          background-color: var(--bg-color);
+          color: var(--fg-color);
+      }
+
+      table, th, td {
+          border: 1px solid var(--fg-color);
+          border-collapse: collapse;
+      }
+      .section {
+          border-bottom: 1px solid var(--fg-color);
+      }
+      .letter {
+          font-family: monospace;
+          display: inline-block;
+          margin: 0px;
+          color: var(--unsolved-fg);
+      }
+      .letter.solved {
+          color: var(--fg-color);
+          background-color: var(--solved-bg);
+      }
+      .letter.selected {
+          background-color: var(--select-bg);
+          color: var(--select-fg);
+      }
+      .letter.solved.selected {
+          background-color: var(--select-solved-bg);
+          color: var(--select-solved-fg);
+      }
+      .letter.fixed {
+          color: var(--fg-color);
+      }
+    </style>
+    <script type="text/javascript">
+    "use strict";
+    class PolySolver {
+        text;
+        numAlphabets;
+        alphabet;
+        mapping;
+        _curSelection;
+
+        constructor(options={}) {
+            this.text = options.text || "";
+            this.numAlphabets = options.numAlphabets || 1;
+            this.alphabet = options.alphabet || "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            if(Array.isArray(options.mapping) && options.mapping.length == this.numAlphabets) {
+                this.mapping = options.mapping;
+            } else {
+                this.mapping = [];
+                for(var i=0; i<this.numAlphabets; i++) {
+                    var map = {};
+                    this.mapping.push(map);
+                }
+            }
+            this._curSelection = null;
+        }
+
+        _onLetterClick = e => {
+            if(this._curSelection) {
+                $(`.${this._curSelection}`).removeClass("selected");
+            }
+            this._curSelection = e.target.classList[1];
+            $(`.${this._curSelection}`).addClass("selected");
+        }
+
+        onKeyDown = e => {
+            if(!this._curSelection)
+                return;
+
+            let [_, index, letter] = this._curSelection.match(/^letter-(\d+)-(.+)$/);
+            letter = this._decodeClassName(letter);
+            index = 0 | index;
+
+            if(e.key === 'Backspace' || e.key === 'Delete') {
+                delete this.mapping[index][letter];
+                $(`.${this._curSelection}`).text(letter);
+                $(`.${this._curSelection}`).removeClass("solved");
+            } else if(e.key.length === 1) {
+                this.mapping[index][letter] = e.key;
+                $(`.${this._curSelection}`).text(e.key);
+                $(`.${this._curSelection}`).addClass("solved");
+            }
+        }
+
+        _encodeClassName(letter) {
+            return letter.charCodeAt(0).toString();
+        }
+
+        _decodeClassName(className) {
+            return String.fromCharCode(parseInt(className));
+        }
+
+        _createLetterSpan(index, letter) {
+            index = index % this.numAlphabets;
+            let solved = this.mapping[index].hasOwnProperty(letter);
+            let value = solved ? this.mapping[index][letter] : letter;
+            let className = this._encodeClassName(letter);
+            var span = $(`<pre class="letter letter-${index}-${className}">${value}</pre>`);
+            if(solved) {
+                span.addClass("solved");
+            }
+            span.bind('click', this._onLetterClick);
+            return span;
+        }
+
+        _createFixedLetterSpan(letter) {
+            if(letter === '\n') {
+                return $(`<br />`);
+            } else {
+                return $(`<pre class="letter fixed">${letter}</pre>`);
+            }
+        }
+
+        _renderMapping(target) {
+            target.empty();
+
+            var row = $("<div></div>");
+            for(var j=0; j<this.alphabet.length; j++) {
+                var ch = this.alphabet[j];
+                row.append(this._createFixedLetterSpan(ch));
+            }
+            target.append(row);
+
+            for(var i=0; i<this.numAlphabets; i++) {
+                var row = $("<div></div>");
+                for(var j=0; j<this.alphabet.length; j++) {
+                    row.append(this._createLetterSpan(i, this.alphabet[j]));
+                }
+                target.append(row);
+            }
+        }
+
+        _renderNGram(text, target, n, limit) {
+            target.empty();
+            var counters = [];
+            for(var i=0; i<this.numAlphabets; i++) {
+                counters.push({});
+            }
+            for(var i=0; i<text.length - n + 1; i++) {
+                let idx = i % this.numAlphabets;
+                let key = text.substring(i, i+n);
+                if(!counters[idx][key])
+                    counters[idx][key] = 0;
+                counters[idx][key] += 1;
+            }
+
+            var table = $("<table></table>");
+            for(var i=0; i<this.numAlphabets; i++) {
+                var ordered = Object.entries(counters[i]);
+                ordered.sort((a, b) => (a[1] < b[1]) ? 1 : -1);
+                var tr = $("<tr></tr>");
+                for(var j=0; j<Math.min(limit, ordered.length); j++) {
+                    let [ngram, count] = ordered[j];
+                    var td = $("<td></td>");
+                    for(var k=0; k<ngram.length; k++) {
+                        td.append(this._createLetterSpan(i + k, ngram[k]));
+                    }
+                    td.append(` ${count}`);
+                    tr.append(td);
+                }
+                table.append(tr);
+            }
+            target.append(table);
+        }
+
+        _renderText(filter, target) {
+            target.empty();
+            var j = 0;
+            for(var i=0; i<this.text.length; i++) {
+                if(this.text[i].match(filter)) {
+                    target.append(this._createFixedLetterSpan(this.text[i]));
+                } else {
+                    target.append(this._createLetterSpan(j, this.text[i]));
+                    j++;
+                }
+            }
+        }
+
+        render() {
+            this._renderMapping($("#sect-mapping"));
+            var filter = new RegExp("[^" + this.alphabet.replace(/[-.*+?^${}()|[\]\\]/g, '\\$&') + "]", "g");
+            var filteredText = this.text.replace(filter, "");
+            this._renderNGram(filteredText, $("#sect-freq1"), 1, 26);
+            this._renderNGram(filteredText, $("#sect-freq2"), 2, 20);
+            this._renderNGram(filteredText, $("#sect-freq3"), 3, 15);
+            this._renderText(filter, $("#text"));
+        }
+    }
+
+    $(function() {
+        var solver = new PolySolver({
+            text: 'THIS IS A TEST',
+            numAlphabets: 1,
+            alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+        });
+        document.addEventListener('keydown', solver.onKeyDown);
+        solver.render();
+        $("#saveload").click(function() {
+            var result = window.prompt("Copy this code, or edit to load a mapping", JSON.stringify(solver.mapping));
+            if(result) {
+                solver.mapping = JSON.parse(result);
+                solver.render();
+            }
+        });
+    });
+    </script>
+  </head>
+  <body>
+    <button id="saveload">Save/Load</button>
+    <div class="section">
+      <h1>Mapping</h1>
+      <div class="section-content" id="sect-mapping"></div>
+    </div>
+    <div class="section">
+      <h1>Letter Frequencies</h1>
+      <div class="section-content" id="sect-freq1"></div>
+    </div>
+    <div class="section">
+      <h1>Bigram Frequencies</h1>
+      <div class="section-content" id="sect-freq2"></div>
+    </div>
+    <div class="section">
+      <h1>Trigram Frequencies</h1>
+      <div class="section-content" id="sect-freq3"></div>
+    </div>
+    <div class="section">
+      <h1>Text</h1>
+      <div class="section-content" id="text"></div>
+    </div>
+  </body>
+</html>
