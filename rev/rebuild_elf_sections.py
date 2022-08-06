@@ -282,6 +282,7 @@ def remove_intervals(intervals, segments):
 def reconstruct_sections(m, end):
     ''' Reconstruct the sections in an mmap'd file. '''
 
+    origlen = end
     m = memoryview(m)
 
     # Page-align end
@@ -507,16 +508,17 @@ def reconstruct_sections(m, end):
     robss_ivals = [] # for lack of a better term
 
     for phdr in p_loads:
+        p_filesz = max(0, min(phdr.p_filesz, origlen - phdr.p_offset))
         if phdr.p_flags & PF.W:
-            if phdr.p_filesz:
-                data_ivals.append((phdr.p_vaddr, phdr.p_vaddr+phdr.p_filesz))
-            if phdr.p_memsz > phdr.p_filesz:
-                bss_ivals.append((phdr.p_vaddr+phdr.p_filesz, phdr.p_vaddr+phdr.p_memsz))
+            if p_filesz:
+                data_ivals.append((phdr.p_vaddr, phdr.p_vaddr+p_filesz))
+            if phdr.p_memsz > p_filesz:
+                bss_ivals.append((phdr.p_vaddr+p_filesz, phdr.p_vaddr+phdr.p_memsz))
         else:
-            if phdr.p_filesz:
-                text_ivals.append((phdr.p_vaddr, phdr.p_vaddr+phdr.p_filesz))
-            if phdr.p_memsz > phdr.p_filesz:
-                robss_ivals.append((phdr.p_vaddr+phdr.p_filesz, phdr.p_vaddr+phdr.p_memsz))
+            if p_filesz:
+                text_ivals.append((phdr.p_vaddr, phdr.p_vaddr+p_filesz))
+            if phdr.p_memsz > p_filesz:
+                robss_ivals.append((phdr.p_vaddr+p_filesz, phdr.p_vaddr+phdr.p_memsz))
 
     text_ivals = remove_intervals(text_ivals, section_ivals)
     data_ivals = remove_intervals(data_ivals, section_ivals)
