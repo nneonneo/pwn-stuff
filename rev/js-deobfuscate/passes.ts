@@ -44,7 +44,7 @@ export function InlineFunction(node: Node, name: String, impl: Function) {
                 return;
 
             const alias = binding.path.getData("alias");
-            if (alias === name) {
+            if (callee.name === name || alias === name) {
                 let funcArgs = path.get("arguments").map((argPath) => argPath.evaluate());
                 if (!funcArgs.every((result) => result.confident)) {
                     return;
