@@ -1,379 +1,397 @@
 <!doctype html>
 <html>
-  <head>
+
+<head>
     <title>Interactive Polyalphabetic Cipher Solver</title>
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <style type="text/css">
-      :root {
-          --bg-color: white;
-          --fg-color: black;
-          --unsolved-fg: #cccccc;
-          --select-bg: #ffe900;
-          --select-fg: black;
-          --solved-bg: #d0efd0;
-          --select-solved-bg: #44ff00;
-          --select-solved-fg: black;
-      }
+        :root {
+            --bg-color: white;
+            --fg-color: black;
+            --unsolved-fg: #cccccc;
+            --select-bg: #ffe900;
+            --select-fg: black;
+            --solved-bg: #d0efd0;
+            --select-solved-bg: #44ff00;
+            --select-solved-fg: black;
+        }
 
-      @media (prefers-color-scheme: dark) {
-          :root {
-              --bg-color: #121212;
-              --fg-color: white;
-              --unsolved-fg: #777777;
-              --select-bg: #bbbb00;
-              --select-fg: black;
-              --solved-bg: #306630;
-              --select-solved-bg: #77bb00;
-              --select-solved-fg: black;
-          }
-      }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #121212;
+                --fg-color: white;
+                --unsolved-fg: #777777;
+                --select-bg: #bbbb00;
+                --select-fg: black;
+                --solved-bg: #306630;
+                --select-solved-bg: #77bb00;
+                --select-solved-fg: black;
+            }
+        }
 
-      body {
-          background-color: var(--bg-color);
-          color: var(--fg-color);
-      }
-      table, th, td {
-          border: 1px solid var(--fg-color);
-          border-collapse: collapse;
-          white-space: nowrap;
-      }
-      .section {
-          border-bottom: 1px solid var(--fg-color);
-      }
-      .letter {
-          font-family: monospace;
-          white-space: pre-wrap;
-          margin: 0px;
-          color: var(--unsolved-fg);
-      }
-      .letter.solved {
-          color: var(--fg-color);
-          background-color: var(--solved-bg);
-      }
-      .letter.selected {
-          background-color: var(--select-bg);
-          color: var(--select-fg);
-      }
-      .letter.solved.selected {
-          background-color: var(--select-solved-bg);
-          color: var(--select-solved-fg);
-      }
-      .letter.fixed {
-          color: var(--fg-color);
-      }
-      .section-edit {
-          margin-bottom: 10px;
-      }
-      .hidden {
-          display: none;
-      }
-      #edit-text {
-          box-sizing: border-box;
-          width: 100%;
-      }
+        body {
+            background-color: var(--bg-color);
+            color: var(--fg-color);
+        }
+
+        table,
+        th,
+        td {
+            border: 1px solid var(--fg-color);
+            border-collapse: collapse;
+            white-space: nowrap;
+        }
+
+        .section {
+            border-bottom: 1px solid var(--fg-color);
+        }
+
+        .letter {
+            font-family: monospace;
+            white-space: pre-wrap;
+            margin: 0px;
+            color: var(--unsolved-fg);
+        }
+
+        .letter.solved {
+            color: var(--fg-color);
+            background-color: var(--solved-bg);
+        }
+
+        .letter.selected {
+            background-color: var(--select-bg);
+            color: var(--select-fg);
+        }
+
+        .letter.solved.selected {
+            background-color: var(--select-solved-bg);
+            color: var(--select-solved-fg);
+        }
+
+        .letter.fixed {
+            color: var(--fg-color);
+        }
+
+        .section-edit {
+            margin-bottom: 10px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #edit-text {
+            box-sizing: border-box;
+            width: 100%;
+        }
     </style>
     <script type="text/javascript">
-    "use strict";
-    class PolySolver {
-        text = "";
-        numAlphabets = 1;
-        alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        mapping = [];
-        numBigram = 20;
-        numTrigram = 15;
-        _curSelection = null;
+        "use strict";
+        class PolySolver {
+            text = "";
+            numAlphabets = 1;
+            alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            mapping = [];
+            numBigram = 20;
+            numTrigram = 15;
+            _curSelection = null;
 
-        constructor(options={}) {
-            this.setOptions(options);
-        }
-
-        setOptions(options) {
-            if("text" in options)
-                this.text = options.text;
-            if("numAlphabets" in options)
-                this.numAlphabets = options.numAlphabets | 0;
-            if("alphabet" in options)
-                this.alphabet = options.alphabet;
-            if("mapping" in options && Array.isArray(options.mapping))
-                this.mapping = options.mapping;
-            if("numBigram" in options)
-                this.numBigram = options.numBigram | 0;
-            if("numTrigram" in options)
-                this.numTrigram = options.numTrigram | 0;
-            for(var i=this.mapping.length; i<this.numAlphabets; i++) {
-                this.mapping.push({});
+            constructor(options = {}) {
+                this.setOptions(options);
             }
-        }
 
-        deselect() {
-            if(this._curSelection) {
-                $(`.${this._curSelection}`).removeClass("selected");
-            }
-            this._curSelection = null;
-        }
-
-        /* Save/load. */
-        static _saveData(key, data) {
-            localStorage.setItem(key, JSON.stringify(data));
-        }
-
-        static _loadData(key) {
-            try {
-                var data = localStorage.getItem(key);
-                if(data) {
-                    return JSON.parse(data);
+            setOptions(options) {
+                if ("text" in options)
+                    this.text = options.text;
+                if ("numAlphabets" in options)
+                    this.numAlphabets = options.numAlphabets | 0;
+                if ("alphabet" in options)
+                    this.alphabet = options.alphabet;
+                if ("mapping" in options && Array.isArray(options.mapping))
+                    this.mapping = options.mapping;
+                if ("numBigram" in options)
+                    this.numBigram = options.numBigram | 0;
+                if ("numTrigram" in options)
+                    this.numTrigram = options.numTrigram | 0;
+                for (var i = this.mapping.length; i < this.numAlphabets; i++) {
+                    this.mapping.push({});
                 }
-            } catch(e) {
-                return {};
             }
-        }
 
-        static getSavedSettings() {
-            return {
-                ...this._loadData('polysolver-settings'),
-                ...this._loadData('polysolver-mapping'),
-            };
-        }
-
-        exportSettings() {
-            return {
-                text: this.text,
-                numAlphabets: this.numAlphabets,
-                alphabet: this.alphabet,
-                mapping: this.mapping.slice(0, this.numAlphabets),
-                numBigram: this.numBigram,
-                numTrigram: this.numTrigram,
+            deselect() {
+                if (this._curSelection) {
+                    $(`.${this._curSelection}`).removeClass("selected");
+                }
+                this._curSelection = null;
             }
-        }
 
-        _saveSettings() {
-            let settings = this.exportSettings();
-            let mapping = {mapping: settings.mapping};
-            delete settings.mapping;
-            this.constructor._saveData('polysolver-settings', settings);
-            this.constructor._saveData('polysolver-mapping', mapping);
-        }
-
-        _saveMapping() {
-            let mapping = {mapping: this.mapping};
-            this.constructor._saveData('polysolver-mapping', mapping);
-        }
-
-        /* UI handlers */
-        _onLetterClick = (e) => {
-            this.deselect();
-            this._curSelection = e.target.classList[1];
-            $(`.${this._curSelection}`).addClass("selected");
-        }
-
-        onKeyDown = (e) => {
-            if(!this._curSelection)
-                return;
-
-            let [_, index, letter] = this._curSelection.match(/^letter-(\d+)-(.+)$/);
-            letter = this._decodeClassName(letter);
-            index = 0 | index;
-
-            if(e.key === 'Backspace' || e.key === 'Delete') {
-                delete this.mapping[index][letter];
-                $(`.${this._curSelection}`).text(letter);
-                $(`.${this._curSelection}`).removeClass("solved");
-                this._saveMapping();
-            } else if(e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-                this.mapping[index][letter] = e.key;
-                $(`.${this._curSelection}`).text(e.key);
-                $(`.${this._curSelection}`).addClass("solved");
-                this._saveMapping();
+            /* Save/load. */
+            static _saveData(key, data) {
+                localStorage.setItem(key, JSON.stringify(data));
             }
-        }
 
-        /* UI rendering */
-        _encodeClassName(letter) {
-            return letter.charCodeAt(0).toString();
-        }
-
-        _decodeClassName(className) {
-            return String.fromCharCode(parseInt(className));
-        }
-
-        _createLetterSpan(index, letter) {
-            index = index % this.numAlphabets;
-            let solved = this.mapping[index].hasOwnProperty(letter);
-            let value = solved ? this.mapping[index][letter] : letter;
-            let className = this._encodeClassName(letter);
-            var span = $(`<span class="letter letter-${index}-${className}">${value}</span>`);
-            if(solved) {
-                span.addClass("solved");
+            static _loadData(key) {
+                try {
+                    var data = localStorage.getItem(key);
+                    if (data) {
+                        return JSON.parse(data);
+                    }
+                } catch (e) {
+                    return {};
+                }
             }
-            span.bind('click', this._onLetterClick);
-            return span;
-        }
 
-        _createFixedLetterSpan(letter) {
-            if(letter === '\n') {
-                return $(`<br />`);
-            } else {
-                return $(`<span class="letter fixed">${letter}</span>`);
+            static getSavedSettings() {
+                return {
+                    ...this._loadData('polysolver-settings'),
+                    ...this._loadData('polysolver-mapping'),
+                };
             }
-        }
 
-        _renderMapping(target) {
-            target.empty();
-
-            var row = $("<div></div>");
-            for(var j=0; j<this.alphabet.length; j++) {
-                var ch = this.alphabet[j];
-                row.append(this._createFixedLetterSpan(ch));
+            exportSettings() {
+                return {
+                    text: this.text,
+                    numAlphabets: this.numAlphabets,
+                    alphabet: this.alphabet,
+                    mapping: this.mapping.slice(0, this.numAlphabets),
+                    numBigram: this.numBigram,
+                    numTrigram: this.numTrigram,
+                }
             }
-            target.append(row);
 
-            for(var i=0; i<this.numAlphabets; i++) {
+            _saveSettings() {
+                let settings = this.exportSettings();
+                let mapping = { mapping: settings.mapping };
+                delete settings.mapping;
+                this.constructor._saveData('polysolver-settings', settings);
+                this.constructor._saveData('polysolver-mapping', mapping);
+            }
+
+            _saveMapping() {
+                let mapping = { mapping: this.mapping };
+                this.constructor._saveData('polysolver-mapping', mapping);
+            }
+
+            /* UI handlers */
+            _onLetterClick = (e) => {
+                this.deselect();
+                this._curSelection = e.target.classList[1];
+                $(`.${this._curSelection}`).addClass("selected");
+            }
+
+            onKeyDown = (e) => {
+                if (!this._curSelection)
+                    return;
+
+                let [_, index, letter] = this._curSelection.match(/^letter-(\d+)-(.+)$/);
+                letter = this._decodeClassName(letter);
+                index = 0 | index;
+
+                if (e.key === 'Backspace' || e.key === 'Delete') {
+                    delete this.mapping[index][letter];
+                    $(`.${this._curSelection}`).text(letter);
+                    $(`.${this._curSelection}`).removeClass("solved");
+                    this._saveMapping();
+                } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+                    this.mapping[index][letter] = e.key;
+                    $(`.${this._curSelection}`).text(e.key);
+                    $(`.${this._curSelection}`).addClass("solved");
+                    this._saveMapping();
+                }
+            }
+
+            /* UI rendering */
+            _encodeClassName(letter) {
+                return letter.charCodeAt(0).toString();
+            }
+
+            _decodeClassName(className) {
+                return String.fromCharCode(parseInt(className));
+            }
+
+            _createLetterSpan(index, letter) {
+                index = index % this.numAlphabets;
+                let solved = this.mapping[index].hasOwnProperty(letter);
+                let value = solved ? this.mapping[index][letter] : letter;
+                let className = this._encodeClassName(letter);
+                var span = $(`<span class="letter letter-${index}-${className}">${value}</span>`);
+                if (solved) {
+                    span.addClass("solved");
+                }
+                span.bind('click', this._onLetterClick);
+                return span;
+            }
+
+            _createFixedLetterSpan(letter) {
+                if (letter === '\n') {
+                    return $(`<br />`);
+                } else {
+                    return $(`<span class="letter fixed">${letter}</span>`);
+                }
+            }
+
+            _renderMapping(target) {
+                target.empty();
+
                 var row = $("<div></div>");
-                for(var j=0; j<this.alphabet.length; j++) {
-                    row.append(this._createLetterSpan(i, this.alphabet[j]));
+                for (var j = 0; j < this.alphabet.length; j++) {
+                    var ch = this.alphabet[j];
+                    row.append(this._createFixedLetterSpan(ch));
                 }
                 target.append(row);
-            }
-        }
 
-        _renderNGram(text, target, n, limit) {
-            target.empty();
-            var counters = [];
-            for(var i=0; i<this.numAlphabets; i++) {
-                counters.push({});
-            }
-            for(var i=0; i<text.length - n + 1; i++) {
-                let idx = i % this.numAlphabets;
-                let key = text.substring(i, i+n);
-                if(!counters[idx][key])
-                    counters[idx][key] = 0;
-                counters[idx][key] += 1;
-            }
-
-            var table = $("<table></table>");
-            for(var i=0; i<this.numAlphabets; i++) {
-                var ordered = Object.entries(counters[i]);
-                ordered.sort((a, b) => (a[1] < b[1]) ? 1 : -1);
-                var tr = $("<tr></tr>");
-                for(var j=0; j<Math.min(limit, ordered.length); j++) {
-                    let [ngram, count] = ordered[j];
-                    var td = $("<td></td>");
-                    for(var k=0; k<ngram.length; k++) {
-                        td.append(this._createLetterSpan(i + k, ngram[k]));
+                for (var i = 0; i < this.numAlphabets; i++) {
+                    var row = $("<div></div>");
+                    for (var j = 0; j < this.alphabet.length; j++) {
+                        row.append(this._createLetterSpan(i, this.alphabet[j]));
                     }
-                    td.append(` ${count}`);
-                    tr.append(td);
-                }
-                table.append(tr);
-            }
-            target.append(table);
-        }
-
-        _renderText(filter, target) {
-            target.empty();
-            var j = 0;
-            for(var i=0; i<this.text.length; i++) {
-                if(this.text[i].match(filter)) {
-                    target.append(this._createFixedLetterSpan(this.text[i]));
-                } else {
-                    target.append(this._createLetterSpan(j, this.text[i]));
-                    j++;
+                    target.append(row);
                 }
             }
-        }
 
-        render() {
-            this._saveSettings();
-            this._renderMapping($("#sect-mapping"));
-            var filter = new RegExp("[^" + this.alphabet.replace(/[-.*+?^${}()|[\]\\]/g, '\\$&') + "]", "g");
-            var filteredText = this.text.replace(filter, "");
-            this._renderNGram(filteredText, $("#sect-freq1"), 1, this.alphabet.length);
-            this._renderNGram(filteredText, $("#sect-freq2"), 2, this.numBigram);
-            this._renderNGram(filteredText, $("#sect-freq3"), 3, this.numTrigram);
-            this._renderText(filter, $("#text"));
-        }
-    }
+            _renderNGram(text, target, n, limit) {
+                target.empty();
+                var counters = [];
+                for (var i = 0; i < this.numAlphabets; i++) {
+                    counters.push({});
+                }
+                for (var i = 0; i < text.length - n + 1; i++) {
+                    let idx = i % this.numAlphabets;
+                    let key = text.substring(i, i + n);
+                    if (!counters[idx][key])
+                        counters[idx][key] = 0;
+                    counters[idx][key] += 1;
+                }
 
-    $(function() {
-        var solver = new PolySolver({
-            text: 'CIPHERTEXT HERE',
-            numAlphabets: 1,
-            alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
-            ...PolySolver.getSavedSettings()
-        });
-        document.addEventListener('keydown', solver.onKeyDown);
-        solver.render();
-        $("#saveload").click(function() {
-            var result = window.prompt("Copy this code, or edit to load settings", JSON.stringify(solver.exportSettings()));
-            if(result) {
-                solver.setOptions(JSON.parse(result));
-                solver.render();
+                var table = $("<table></table>");
+                for (var i = 0; i < this.numAlphabets; i++) {
+                    var ordered = Object.entries(counters[i]);
+                    ordered.sort((a, b) => (a[1] < b[1]) ? 1 : -1);
+                    var tr = $("<tr></tr>");
+                    for (var j = 0; j < Math.min(limit, ordered.length); j++) {
+                        let [ngram, count] = ordered[j];
+                        var td = $("<td></td>");
+                        for (var k = 0; k < ngram.length; k++) {
+                            td.append(this._createLetterSpan(i + k, ngram[k]));
+                        }
+                        td.append(` ${count}`);
+                        tr.append(td);
+                    }
+                    table.append(tr);
+                }
+                target.append(table);
             }
-        });
-        let editableSettings = ["alphabet", "numAlphabets", "numBigram", "numTrigram", "text"];
-        for(var key of editableSettings) {
-            let mkey = key;
-            $("#edit-" + key).on("input", function(e) {
-                let options = {};
-                options[mkey] = this.value;
-                solver.setOptions(options);
-                solver.render();
-            }).on("focus", function(e) {
-                solver.deselect();
+
+            _renderText(filter, target) {
+                target.empty();
+                var j = 0;
+                for (var i = 0; i < this.text.length; i++) {
+                    if (this.text[i].match(filter)) {
+                        target.append(this._createFixedLetterSpan(this.text[i]));
+                    } else {
+                        target.append(this._createLetterSpan(j, this.text[i]));
+                        j++;
+                    }
+                }
+            }
+
+            render() {
+                this._saveSettings();
+                this._renderMapping($("#sect-mapping"));
+                var filter = new RegExp("[^" + this.alphabet.replace(/[-.*+?^${}()|[\]\\]/g, '\\$&') + "]", "g");
+                var filteredText = this.text.replace(filter, "");
+                this._renderNGram(filteredText, $("#sect-freq1"), 1, this.alphabet.length);
+                this._renderNGram(filteredText, $("#sect-freq2"), 2, this.numBigram);
+                this._renderNGram(filteredText, $("#sect-freq3"), 3, this.numTrigram);
+                this._renderText(filter, $("#text"));
+            }
+        }
+
+        $(function () {
+            var solver = new PolySolver({
+                text: 'CIPHERTEXT HERE',
+                numAlphabets: 1,
+                alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+                ...PolySolver.getSavedSettings()
             });
-        }
-
-        function resizeTextarea() {
-            this.style.height = "";
-            this.style.height = this.scrollHeight + "px";
-        };
-
-        $("#edit-text").on("input", resizeTextarea);
-        $("#toggle-edit").click(function() {
-            $(".section-edit").toggleClass("hidden");
-            for(var key of editableSettings) {
-                $("#edit-" + key).val(solver[key]);
+            document.addEventListener('keydown', solver.onKeyDown);
+            solver.render();
+            $("#saveload").click(function () {
+                var result = window.prompt("Copy this code, or edit to load settings", JSON.stringify(solver.exportSettings()));
+                if (result) {
+                    solver.setOptions(JSON.parse(result));
+                    solver.render();
+                }
+            });
+            let editableSettings = ["alphabet", "numAlphabets", "numBigram", "numTrigram", "text"];
+            for (var key of editableSettings) {
+                let mkey = key;
+                $("#edit-" + key).on("input", function (e) {
+                    let options = {};
+                    options[mkey] = this.value;
+                    solver.setOptions(options);
+                    solver.render();
+                }).on("focus", function (e) {
+                    solver.deselect();
+                });
             }
-            $("#edit-text").each(resizeTextarea);
+
+            function resizeTextarea() {
+                this.style.height = "";
+                this.style.height = this.scrollHeight + "px";
+            };
+
+            $("#edit-text").on("input", resizeTextarea);
+            $("#toggle-edit").click(function () {
+                $(".section-edit").toggleClass("hidden");
+                for (var key of editableSettings) {
+                    $("#edit-" + key).val(solver[key]);
+                }
+                $("#edit-text").each(resizeTextarea);
+            });
         });
-    });
     </script>
-  </head>
-  <body>
+</head>
+
+<body>
     <button id="saveload">Save/Load</button>
     <button id="toggle-edit">Show/Hide Edit Controls</button>
     <div class="section">
-      <h2>Mapping</h2>
-      <div class="section-edit hidden">
-        <label for="edit-alphabet">Alphabet:</label> <input type="text" id="edit-alphabet" size="40"><br />
-        <label for="edit-numAlphabets">Number of alphabets:</label> <input type="number" id="edit-numAlphabets" min="1" size="3">
-      </div>
-      <div class="section-content" id="sect-mapping"></div>
+        <h2>Mapping</h2>
+        <div class="section-edit hidden">
+            <label for="edit-alphabet">Alphabet:</label> <input type="text" id="edit-alphabet" size="40"><br />
+            <label for="edit-numAlphabets">Number of alphabets:</label> <input type="number" id="edit-numAlphabets"
+                min="1" size="3">
+        </div>
+        <div class="section-content" id="sect-mapping"></div>
     </div>
     <div class="section">
-      <h2>Letter Frequencies</h2>
-      <div class="section-content" id="sect-freq1"></div>
+        <h2>Letter Frequencies</h2>
+        <div class="section-content" id="sect-freq1"></div>
     </div>
     <div class="section">
-      <h2>Bigram Frequencies</h2>
-      <div class="section-edit hidden">
-        <label for="edit-numBigram">Number of bigrams to show:</label> <input type="number" id="edit-numBigram" min="0" size="3">
-      </div>
-      <div class="section-content" id="sect-freq2"></div>
+        <h2>Bigram Frequencies</h2>
+        <div class="section-edit hidden">
+            <label for="edit-numBigram">Number of bigrams to show:</label> <input type="number" id="edit-numBigram"
+                min="0" size="3">
+        </div>
+        <div class="section-content" id="sect-freq2"></div>
     </div>
     <div class="section">
-      <h2>Trigram Frequencies</h2>
-      <div class="section-edit hidden">
-        <label for="edit-numTrigram">Number of trigrams to show:</label> <input type="number" id="edit-numTrigram" min="0" size="3">
-      </div>
-      <div class="section-content" id="sect-freq3"></div>
+        <h2>Trigram Frequencies</h2>
+        <div class="section-edit hidden">
+            <label for="edit-numTrigram">Number of trigrams to show:</label> <input type="number" id="edit-numTrigram"
+                min="0" size="3">
+        </div>
+        <div class="section-content" id="sect-freq3"></div>
     </div>
     <div class="section">
-      <h2>Text</h2>
-      <div class="section-edit hidden">
-        <label for="edit-text">Ciphertext:</label><br/><textarea id="edit-text" width="100%"></textarea>
-      </div>
-      <div class="section-content" id="text"></div>
+        <h2>Text</h2>
+        <div class="section-edit hidden">
+            <label for="edit-text">Ciphertext:</label><br /><textarea id="edit-text" width="100%"></textarea>
+        </div>
+        <div class="section-content" id="text"></div>
     </div>
-  </body>
+</body>
+
 </html>
