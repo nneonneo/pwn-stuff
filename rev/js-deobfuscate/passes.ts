@@ -1,6 +1,6 @@
 import generate from "@babel/generator";
 import traverse, { Binding, Node, NodePath, Scope } from "@babel/traverse";
-import { CallExpression, Expression, FunctionExpression, Identifier, MemberExpression, ObjectExpression, StringLiteral, UnaryExpression, booleanLiteral, cloneNode, identifier, isArrayExpression, isExpression, isFor, isFunction, isFunctionExpression, isIdentifier, isLVal, isMemberExpression, isObjectExpression, isObjectProperty, isReturnStatement, isStringLiteral, isUnaryExpression, isVariableDeclarator, stringLiteral } from "@babel/types";
+import * as t from "@babel/types";
 
 function dump(node: Node): string {
     return node.type + "(" + generate(node).code + ")";
@@ -28,7 +28,7 @@ export function InlineFunction(node: Node, name: String, impl: Function) {
         VariableDeclarator(path) {
             const id = path.node.id;
             const init = path.node.init;
-            if (!isIdentifier(id) || !isIdentifier(init))
+            if (!t.isIdentifier(id) || !t.isIdentifier(init))
                 return;
 
             const initBinding = path.scope.getBinding(init.name);
@@ -41,7 +41,7 @@ export function InlineFunction(node: Node, name: String, impl: Function) {
     traverse(node, {
         CallExpression(path) {
             const callee = path.node.callee;
-            if (!isIdentifier(callee))
+            if (!t.isIdentifier(callee))
                 return;
 
             const binding = path.scope.getBinding(callee.name);
@@ -56,10 +56,11 @@ export function InlineFunction(node: Node, name: String, impl: Function) {
                 }
                 let funcArgValues = funcArgs.map((result) => result.value);
                 console.log(callee.name, alias, funcArgValues);
-                path.replaceWith(stringLiteral(impl.apply(null, funcArgValues)));
+                path.replaceWith(t.stringLiteral(impl.apply(null, funcArgValues)));
             }
         }
     });
+
     // Delete the now-useless aliasing assignments
     traverse(node, {
         VariableDeclarator(path) {
@@ -94,8 +95,8 @@ export function SimplifyConstantBranches(node: Node) {
 
 /** Replace !![] => true, ![] => false */
 export function SimplifyBooleans(node: Node) {
-    function isFalseExpression(node: UnaryExpression) {
-        if (node.operator === "!" && isArrayExpression(node.argument) && node.argument.elements.length === 0) {
+    function isFalseExpression(node: t.UnaryExpression) {
+        if (node.operator === "!" && t.isArrayExpression(node.argument) && node.argument.elements.length === 0) {
             return true;
         }
         return false;
@@ -104,9 +105,9 @@ export function SimplifyBooleans(node: Node) {
     traverse(node, {
         UnaryExpression(path) {
             if (isFalseExpression(path.node)) {
-                path.replaceWith(booleanLiteral(false));
-            } else if (path.node.operator === "!" && isUnaryExpression(path.node.argument) && isFalseExpression(path.node.argument)) {
-                path.replaceWith(booleanLiteral(true));
+                path.replaceWith(t.booleanLiteral(false));
+            } else if (path.node.operator === "!" && t.isUnaryExpression(path.node.argument) && isFalseExpression(path.node.argument)) {
+                path.replaceWith(t.booleanLiteral(true));
             }
         }
     });
@@ -125,9 +126,9 @@ export function NormalizeNumbers(node: Node) {
 
 /** Convert property accesses E['X'] to E.X notation where possible */
 export function ConvertToDotNotation(node: Node) {
-    function makeIdentifier(node: Node): Identifier | undefined {
-        if (isStringLiteral(node) && node.value.match(/^[_A-Za-z$][_A-Za-z0-9$]*$/)) {
-            return identifier(node.value);
+    function makeIdentifier(node: Node): t.Identifier | undefined {
+        if (t.isStringLiteral(node) && node.value.match(/^[_A-Za-z$][_A-Za-z0-9$]*$/)) {
+            return t.identifier(node.value);
         }
     }
 
@@ -190,7 +191,7 @@ export function RenameVariables(node: Node, shouldRename: (ident: string) => boo
     traverse(node, {
         Function(path) {
             for (let param of path.node.params) {
-                if (isIdentifier(param)) {
+                if (t.isIdentifier(param)) {
                     renameVariable(path, param.name, [], "p", 1);
                 }
                 /* TODO(nneonneo): patterns? */
@@ -198,7 +199,7 @@ export function RenameVariables(node: Node, shouldRename: (ident: string) => boo
         },
         VariableDeclarator(path) {
             const id = path.node.id;
-            if (!isIdentifier(id))
+            if (!t.isIdentifier(id))
                 return;
 
             let parent = path.parentPath;
@@ -206,7 +207,7 @@ export function RenameVariables(node: Node, shouldRename: (ident: string) => boo
                 parent = parent?.parentPath;
             }
 
-            if (parent && isFor(parent)) {
+            if (parent && t.isFor(parent)) {
                 renameVariable(path, id.name, ["i", "j", "k"], "i", 4);
             } else {
                 renameVariable(path, id.name, [], "v", 1);
