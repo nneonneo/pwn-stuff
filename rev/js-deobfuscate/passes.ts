@@ -1,5 +1,7 @@
 import traverse, { Node, NodePath } from "@babel/traverse";
-import { UnaryExpression, booleanLiteral, identifier, isArrayExpression, isFor, isIdentifier, isPattern, isStatement, isStringLiteral, isUnaryExpression, numericLiteral, stringLiteral } from "@babel/types";
+import { Identifier, isObjectProperty } from "@babel/types";
+import { isObjectMethod } from "@babel/types";
+import { ObjectExpression, UnaryExpression, booleanLiteral, identifier, isArrayExpression, isFor, isIdentifier, isPattern, isStatement, isStringLiteral, isUnaryExpression, numericLiteral, stringLiteral } from "@babel/types";
 
 /** Normalize the appearance of strings and remove \xNN and \uNNNN escapes where possible */
 export function NormalizeStrings(node: Node) {
@@ -120,13 +122,33 @@ export function NormalizeNumbers(node: Node) {
 
 /** Convert property accesses E['X'] to E.X notation where possible */
 export function ConvertToDotNotation(node: Node) {
+    function makeIdentifier(node: Node): Identifier | undefined {
+        if (isStringLiteral(node) && node.value.match(/^[_A-Za-z$][_A-Za-z0-9$]*$/)) {
+            return identifier(node.value);
+        }
+    }
+
     traverse(node, {
+        ObjectMember(path) {
+            const newId = makeIdentifier(path.node.key);
+            if (newId) {
+                path.node.computed = false;
+                path.node.key = newId;
+            }
+        },
+        ClassMethod(path) {
+            const newId = makeIdentifier(path.node.key);
+            if (newId) {
+                path.node.computed = false;
+                path.node.key = newId;
+            }
+        },
         MemberExpression(path) {
             if (path.node.computed) {
-                const property = path.node.property;
-                if (isStringLiteral(property) && property.value.match(/^[_A-Za-z$][_A-Za-z0-9$]*$/)) {
+                const newId = makeIdentifier(path.node.property);
+                if (newId) {
                     path.node.computed = false;
-                    path.node.property = identifier(property.value);
+                    path.node.property = newId;
                 }
             }
         }
