@@ -21,9 +21,36 @@ export function NormalizeStrings(node: Node) {
  * For example, you could pass the string obfuscation lookup function, after
  * copying the relevant string array decryption code. */
 export function InlineFunction(node: Node, name: String, impl: Function) {
-    /* Collect aliases of the target function.
-    TODO: this might be a bit safer if we specified a Path as a target
-    rather than a name */
+    let targetPaths: NodePath[] = [];
+
+    traverse(node, {
+        FunctionDeclaration(path) {
+            const id = path.node.id;
+
+            // path.scope should be FunctionDeclaration
+            // parent should be the top-level program
+            let parent = path.scope.parent;
+            if (parent && parent.parent) {
+                // this is a nested function of some kind - ignore
+                return;
+            }
+            if (t.isIdentifier(id) && id.name === name) {
+                targetPaths.push(path);
+                path.setData("alias", name);
+            }
+        }
+    });
+
+    if (targetPaths.length === 0) {
+        console.error("Failed to find function declaration for " + name);
+        return;
+    }
+    if (targetPaths.length > 1) {
+        console.error("Too many function declarations for " + name + "!");
+        return;
+    }
+
+    /* Collect aliases of the target function. */
     traverse(node, {
         VariableDeclarator(path) {
             const id = path.node.id;
@@ -62,6 +89,7 @@ export function InlineFunction(node: Node, name: String, impl: Function) {
     });
 
     // Delete the now-useless aliasing assignments
+    targetPaths[0].remove();
     traverse(node, {
         VariableDeclarator(path) {
             const alias = path.getData("alias");
