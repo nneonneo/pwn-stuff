@@ -121,6 +121,258 @@ export function SimplifyConstantBranches(node: Node) {
     });
 }
 
+/** Undo obfuscator.io's "control flow flattening", which is really just moving
+ * certain trivial operations and strings into a local object variable.
+ * You'll probably want to inline the string encryption routines first, then
+ * run SimplifyConstantBranches afterwards to simplify inlined branch tests.
+ */
+export function InlineTrivialOpObjects(node: Node) {
+    type OpValue = t.StringLiteral | t.FunctionExpression;
+    type OpObject = { [key: string]: OpValue };
+    function parseTrivialOpObject(node: t.ObjectExpression): OpObject | undefined {
+        let result = {};
+
+        for (let prop of node.properties) {
+            if (!t.isObjectProperty(prop)) {
+                // so far, the obfuscator does not use member functions; the
+                // functions it does contain are of the form "asdfg": function(...) {...}
+                return;
+            }
+
+            let key: string;
+            if (t.isIdentifier(prop.key)) {
+                key = prop.key.name;
+            } else if (t.isStringLiteral(prop.key)) {
+                key = prop.key.value;
+            } else {
+                // so far, keys on these are always constants
+                return;
+            }
+            if (key.length !== 5) {
+                // XXX this is making a serious assumption about the obfuscator being used!
+                // this particular obfuscation always seems to use 5-character keys...
+                return;
+            }
+
+            if (t.isStringLiteral(prop.value)) {
+                result[key] = prop.value;
+            } else if (t.isFunctionExpression(prop.value)) {
+                result[key] = prop.value;
+            } else {
+                return;
+            }
+        }
+        if (node.properties.length >= 1) {
+            return result;
+        }
+    }
+
+    function getObjectBinding(scope: Scope, node: t.Expression): Binding | undefined {
+        if (!t.isIdentifier(node)) {
+            return;
+        }
+        return scope.getBinding(node.name);
+    }
+
+    function getPropertyName(node: t.MemberExpression): string | undefined {
+        if (t.isIdentifier(node.property)) {
+            return node.property.name;
+        } else if (t.isStringLiteral(node.property)) {
+            return node.property.value;
+        }
+    }
+
+    function getOpRef(scope: Scope, node: t.MemberExpression): OpValue | undefined {
+        const binding = getObjectBinding(scope, node.object);
+        if (!binding) {
+            return;
+        }
+
+        const obj: OpObject | undefined = binding.path.getData("trivial_op");
+        if (!obj) {
+            return;
+        }
+
+        const key = getPropertyName(node);
+        if (!key) {
+            return;
+        }
+
+        return obj[key];
+    }
+
+    function isExpressionArray(arr: any[]): arr is t.Expression[] {
+        return arr.every((obj) => t.isExpression(obj));
+    }
+
+    function substitute(path: NodePath<t.CallExpression>, func: t.FunctionExpression, args: t.Expression[]): boolean {
+        if (func.body.body.length != 1) {
+            console.log(`function ${dump(func)} is not simple!`);
+            return false;
+        }
+
+        let argMap: { [key: string]: t.Expression } = {};
+        for (var i = 0; i < func.params.length; i++) {
+            const param = func.params[i];
+            if (!t.isIdentifier(param)) {
+                console.log(`function ${dump(func)}: arguments are not simple`);
+                return false;
+            }
+            argMap[param.name] = args[i] || t.identifier("undefined");
+        }
+
+        // TODO(nneonneo): maybe we can relax this
+        const bodyStatement = func.body.body[0];
+        if (!t.isReturnStatement(bodyStatement)) {
+            console.log(`function ${dump(func)} is not a single return statement!`);
+            return false;
+        }
+
+        const bodyExpr = bodyStatement.argument;
+        if (!bodyExpr) {
+            path.replaceWith(t.identifier("undefined"));
+            return true;
+        }
+
+        let newExpr = t.cloneNode(bodyExpr);
+        path.replaceWith(newExpr);
+        traverse(newExpr, {
+            Identifier(npath) {
+                if (npath.node.name in argMap) {
+                    // XXX(nneonneo) this is a horrible hack.
+                    // If we attempt to do the replacement here, Babel explodes.
+                    // This might be due to the fact that we're inside an active traversal.
+                    npath.setData("__replaceMe", t.cloneNode(argMap[npath.node.name]));
+                }
+            }
+        }, path.scope, undefined, path.parentPath);
+        return true;
+    }
+
+    // Find all potential trivial op objects
+    traverse(node, {
+        VariableDeclarator(path) {
+            const id = path.node.id;
+            const init = path.node.init;
+            if (!t.isIdentifier(id) || !t.isObjectExpression(init))
+                return;
+
+            let obj = parseTrivialOpObject(init);
+            if (obj) {
+                path.setData("trivial_op", obj);
+                path.setData("trivial_op_clean", true);
+            }
+        }
+    });
+
+    // Validation pass to make sure we aren't doing anything weird with this object
+    traverse(node, {
+        VariableDeclarator(path) {
+            if (path.getData("trivial_op")) {
+                path.skip();
+            }
+        },
+        MemberExpression(path) {
+            const binding = getObjectBinding(path.scope, path.node.object);
+            if (!binding) {
+                return;
+            }
+
+            const obj: OpObject | undefined = binding.path.getData("trivial_op");
+            if (!obj) {
+                return;
+            }
+
+            const key = getPropertyName(path.node);
+            if (!key) {
+                console.log(`object ${binding.identifier.name} used with computed member expression ${dump(path.node)}; not trivial`);
+                binding.path.setData("trivial_op_clean", false);
+            } else if (path.parentPath.isAssignmentExpression({ left: path.node })) {
+                console.log(`property ${dump(path.node)} is being set in ${dump(path.parent)}!`);
+                delete obj[key];
+                binding.path.setData("trivial_op_clean", false);
+            }
+            path.skip();
+        },
+        Identifier(path) {
+            const binding = getObjectBinding(path.scope, path.node);
+            if (!binding) {
+                return;
+            }
+
+            const obj: OpObject | undefined = binding.path.getData("trivial_op");
+            if (!obj) {
+                return;
+            }
+
+            const parent = path.parent;
+            console.log(`object ${path.node.name} used in non-member expression ${dump(parent)}; not trivial`);
+            binding.path.setData("trivial_op_clean", false);
+        }
+    });
+
+    // Main replacement pass
+    traverse(node, {
+        CallExpression(path) {
+            const callee = path.node.callee;
+            if (!t.isMemberExpression(callee)) {
+                return;
+            }
+            const opRef = getOpRef(path.scope, callee);
+            if (!opRef) {
+                return;
+            }
+            if (t.isFunctionExpression(opRef) && isExpressionArray(path.node.arguments)) {
+                const result = substitute(path, opRef, path.node.arguments);
+                if (result) {
+                    return;
+                }
+            }
+
+            console.log(`unable to substitute call ${dump(path.node)}!`);
+            const binding = getObjectBinding(path.scope, callee.object);
+            if (binding) {
+                binding.path.setData("trivial_op_clean", false);
+            }
+        },
+        Identifier(path) {
+            const obj = path.getData("__replaceMe");
+            if (obj) {
+                path.setData("__replaceMe", undefined);
+                path.replaceWith(obj);
+            }
+        },
+        MemberExpression(path) {
+            if (path.parentPath.isCallExpression({ callee: path.node })) {
+                return;
+            }
+            const opRef = getOpRef(path.scope, path.node);
+            if (!opRef) {
+                return;
+            }
+            if (t.isStringLiteral(opRef)) {
+                path.replaceWith(t.cloneNode(opRef));
+                return;
+            }
+
+            console.log(`unable to substitute string ${dump(path.node)}!`);
+            const binding = getObjectBinding(path.scope, path.node.object);
+            if (binding) {
+                binding.path.setData("trivial_op_clean", false);
+            }
+        }
+    });
+
+    // Delete unused trivial op declarators
+    traverse(node, {
+        VariableDeclarator(path) {
+            if (path.getData("trivial_op") && path.getData("trivial_op_clean")) {
+                path.remove();
+            }
+        }
+    });
+}
+
 /** Replace !![] => true, ![] => false */
 export function SimplifyBooleans(node: Node) {
     function isFalseExpression(node: t.UnaryExpression) {
