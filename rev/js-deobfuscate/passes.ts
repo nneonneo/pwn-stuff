@@ -1,5 +1,5 @@
-import traverse, { Node } from "@babel/traverse";
-import { UnaryExpression, booleanLiteral, identifier, isArrayExpression, isIdentifier, isStringLiteral, isUnaryExpression, numericLiteral, stringLiteral } from "@babel/types";
+import traverse, { Node, NodePath } from "@babel/traverse";
+import { UnaryExpression, booleanLiteral, identifier, isArrayExpression, isFor, isIdentifier, isPattern, isStatement, isStringLiteral, isUnaryExpression, numericLiteral, stringLiteral } from "@babel/types";
 
 /** Normalize the appearance of strings and remove \xNN and \uNNNN escapes where possible */
 export function NormalizeStrings(node: Node) {
@@ -100,7 +100,7 @@ export function SimplifyBooleans(node: Node) {
         UnaryExpression(path) {
             if (isFalseExpression(path.node)) {
                 path.replaceWith(booleanLiteral(false));
-            } else if(path.node.operator === "!" && isUnaryExpression(path.node.argument) && isFalseExpression(path.node.argument)) {
+            } else if (path.node.operator === "!" && isUnaryExpression(path.node.argument) && isFalseExpression(path.node.argument)) {
                 path.replaceWith(booleanLiteral(true));
             }
         }
@@ -128,6 +128,63 @@ export function ConvertToDotNotation(node: Node) {
                     path.node.computed = false;
                     path.node.property = identifier(property.value);
                 }
+            }
+        }
+    });
+}
+
+/** Heuristically rename variables to be more useful.
+ * Parameters => p1, p2, p3, ...
+ * Local variables => v1, v2, v3, ...
+ * Loop variables => i, j, k, i4, i5, ...
+ * 
+ * shouldRename is a callback that determines if a variable should be renamed:
+ *  for example, if it is below a certain length, or if it starts with _0x, etc.
+ */
+export function RenameVariables(node: Node, shouldRename: (ident: string) => boolean) {
+    function renameVariable(path: NodePath, oldName: string, fixedNames: string[], prefixName: string, prefixStart: number) {
+        if (!shouldRename(oldName)) {
+            return;
+        }
+        for (let newName of fixedNames) {
+            if (!path.scope.hasBinding(newName)) {
+                path.scope.rename(oldName, newName);
+                return;
+            }
+        }
+        while (true) {
+            let newName = prefixName + prefixStart;
+            if (!path.scope.hasBinding(newName)) {
+                path.scope.rename(oldName, newName);
+                return;
+            }
+            prefixStart++;
+        }
+    }
+
+    traverse(node, {
+        Function(path) {
+            for (let param of path.node.params) {
+                if (isIdentifier(param)) {
+                    renameVariable(path, param.name, [], "p", 1);
+                }
+                /* TODO(nneonneo): patterns? */
+            }
+        },
+        VariableDeclarator(path) {
+            const id = path.node.id;
+            if (!isIdentifier(id))
+                return;
+
+            let parent = path.parentPath;
+            if (parent?.isVariableDeclaration()) {
+                parent = parent?.parentPath;
+            }
+
+            if (parent && isFor(parent)) {
+                renameVariable(path, id.name, ["i", "j", "k"], "i", 4);
+            } else {
+                renameVariable(path, id.name, [], "v", 1);
             }
         }
     });
