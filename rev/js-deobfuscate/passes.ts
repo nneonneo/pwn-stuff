@@ -1,7 +1,10 @@
-import traverse, { Node, NodePath } from "@babel/traverse";
-import { Identifier, isObjectProperty } from "@babel/types";
-import { isObjectMethod } from "@babel/types";
-import { ObjectExpression, UnaryExpression, booleanLiteral, identifier, isArrayExpression, isFor, isIdentifier, isPattern, isStatement, isStringLiteral, isUnaryExpression, numericLiteral, stringLiteral } from "@babel/types";
+import generate from "@babel/generator";
+import traverse, { Binding, Node, NodePath, Scope } from "@babel/traverse";
+import { CallExpression, Expression, FunctionExpression, Identifier, MemberExpression, ObjectExpression, StringLiteral, UnaryExpression, booleanLiteral, cloneNode, identifier, isArrayExpression, isExpression, isFor, isFunction, isFunctionExpression, isIdentifier, isLVal, isMemberExpression, isObjectExpression, isObjectProperty, isReturnStatement, isStringLiteral, isUnaryExpression, isVariableDeclarator, stringLiteral } from "@babel/types";
+
+function dump(node: Node): string {
+    return node.type + "(" + generate(node).code + ")";
+}
 
 /** Normalize the appearance of strings and remove \xNN and \uNNNN escapes where possible */
 export function NormalizeStrings(node: Node) {
@@ -71,7 +74,7 @@ export function InlineFunction(node: Node, name: String, impl: Function) {
 /** Simplify branches with a constant predicate */
 export function SimplifyConstantBranches(node: Node) {
     traverse(node, {
-        IfStatement(path) {
+        Conditional(path) {
             let test = path.get("test").evaluateTruthy();
             if (test === undefined)
                 return;
