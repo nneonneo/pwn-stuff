@@ -42,7 +42,7 @@
       }
       .letter {
           font-family: monospace;
-          display: inline-block;
+          white-space: pre-wrap;
           margin: 0px;
           color: var(--unsolved-fg);
       }
@@ -201,7 +201,7 @@
             let solved = this.mapping[index].hasOwnProperty(letter);
             let value = solved ? this.mapping[index][letter] : letter;
             let className = this._encodeClassName(letter);
-            var span = $(`<pre class="letter letter-${index}-${className}">${value}</pre>`);
+            var span = $(`<span class="letter letter-${index}-${className}">${value}</span>`);
             if(solved) {
                 span.addClass("solved");
             }
@@ -213,7 +213,7 @@
             if(letter === '\n') {
                 return $(`<br />`);
             } else {
-                return $(`<pre class="letter fixed">${letter}</pre>`);
+                return $(`<span class="letter fixed">${letter}</span>`);
             }
         }
 
