@@ -1,5 +1,5 @@
 import traverse, { Node } from "@babel/traverse";
-import { identifier, isIdentifier, isStringLiteral, stringLiteral } from "@babel/types";
+import { UnaryExpression, booleanLiteral, identifier, isArrayExpression, isIdentifier, isStringLiteral, isUnaryExpression, numericLiteral, stringLiteral } from "@babel/types";
 
 /** Normalize the appearance of strings and remove \xNN and \uNNNN escapes where possible */
 export function NormalizeStrings(node: Node) {
@@ -82,6 +82,37 @@ export function SimplifyConstantBranches(node: Node) {
                 } else {
                     path.remove();
                 }
+            }
+        }
+    });
+}
+
+/** Replace !![] => true, ![] => false */
+export function SimplifyBooleans(node: Node) {
+    function isFalseExpression(node: UnaryExpression) {
+        if (node.operator === "!" && isArrayExpression(node.argument) && node.argument.elements.length === 0) {
+            return true;
+        }
+        return false;
+    }
+
+    traverse(node, {
+        UnaryExpression(path) {
+            if (isFalseExpression(path.node)) {
+                path.replaceWith(booleanLiteral(false));
+            } else if(path.node.operator === "!" && isUnaryExpression(path.node.argument) && isFalseExpression(path.node.argument)) {
+                path.replaceWith(booleanLiteral(true));
+            }
+        }
+    });
+}
+
+/** Normalize the appearance of numbers, transforming hexadecimal integers into decimal */
+export function NormalizeNumbers(node: Node) {
+    traverse(node, {
+        NumericLiteral(path) {
+            if (path.node.extra && path.node.extra.raw) {
+                delete path.node.extra.raw;
             }
         }
     });
