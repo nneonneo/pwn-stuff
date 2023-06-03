@@ -6,9 +6,16 @@ function dump(node: Node): string {
     return node.type + "(" + generate(node).code + ")";
 }
 
-/** Normalize the appearance of strings and remove \xNN and \uNNNN escapes where possible */
+/** Normalize the appearance of strings, collapse string concatenation, and remove \xNN and \uNNNN escapes where possible */
 export function NormalizeStrings(node: Node) {
     traverse(node, {
+        BinaryExpression: {
+            exit(path) {
+                if (path.node.operator === "+" && t.isStringLiteral(path.node.left) && t.isStringLiteral(path.node.right)) {
+                    path.replaceWith(t.stringLiteral(path.node.left.value + path.node.right.value));
+                }
+            }
+        },
         StringLiteral(path) {
             if (path.node.extra && path.node.extra.raw) {
                 delete path.node.extra.raw;
