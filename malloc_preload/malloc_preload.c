@@ -1,3 +1,4 @@
+/* Lightweight tracing for malloc. */
 #include <dlfcn.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -119,6 +120,9 @@ void free(void *ptr) {
 }
 
 time_t time(time_t *t) {
+	static time_t (*fn)(time_t *);
+	if(!fn) fn = dlsym(RTLD_NEXT, "time");
+
 	time_t ret = 0;
 
 	int fd = open("time.txt", O_RDWR);
@@ -127,16 +131,18 @@ time_t time(time_t *t) {
 		read(fd, buf, 16);
 		ret = atoi(buf);
 		close(fd);
+		if(t)
+			*t = ret;
+	} else {
+		ret = fn(t);
 	}
 
 	PRINTF(32, "time() = %ld\n", ret);
-
-	if(t) *t = ret;
 	return ret;
 }
 
 int rand(void) {
-	static int(*fn)(void);
+	static int (*fn)(void);
 	if(!fn) fn = dlsym(RTLD_NEXT, "rand");
 
 	int ret = fn();
