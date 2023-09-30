@@ -57,7 +57,7 @@ def _process_linear_equations(equations, vars, guesses) -> List[Tuple[List[int],
     return result
 
 
-def solve_linear_mod(equations, bounds, verbose=False, **lll_args):
+def solve_linear_mod(equations, bounds, verbose=False, use_flatter=False, **lll_args):
     """Solve an arbitrary system of modular linear equations over different moduli.
 
     equations: A sequence of (lhs == rhs, M) pairs, where lhs and rhs are expressions and M is the modulus.
@@ -68,6 +68,7 @@ def solve_linear_mod(equations, bounds, verbose=False, **lll_args):
         - A tuple of integers (X, E, Y): Variable is assumed to be bounded within [X, Y] with an expected value of E.
         All variables used in the equations must be bounded.
     verbose: set to True to enable additional output
+    use_flatter: set to True to use [flatter](https://github.com/keeganryan/flatter), which is much faster
     lll_args: Additional arguments passed to LLL, for advanced usage.
 
     NOTE: Bounds are *soft*. This function may return solutions above the bounds. If this happens, and the result
@@ -179,12 +180,22 @@ def solve_linear_mod(equations, bounds, verbose=False, **lll_args):
 
     if verbose:
         print("verbose: scaling shifts:", [math.log2(int(s)) for s in col_scales])
+        print("verbose: matrix dimensions:", B.dimensions())
         print("verbose: unscaled matrix before:")
         print(B.n())
 
     for i, s in enumerate(col_scales):
         B[:, i] *= s
-    B = B.LLL(**lll_args)
+    if use_flatter:
+        from re import findall
+        from subprocess import check_output
+
+        # compile https://github.com/keeganryan/flatter and put it in $PATH
+        z = "[[" + "]\n[".join(" ".join(map(str, row)) for row in B) + "]]"
+        ret = check_output(["flatter"], input=z.encode())
+        B = matrix(B.nrows(), B.ncols(), map(int, findall(b"-?\\d+", ret)))
+    else:
+        B = B.LLL(**lll_args)
     for i, s in enumerate(col_scales):
         B[:, i] /= s
 
