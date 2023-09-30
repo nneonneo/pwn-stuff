@@ -1,0 +1,401 @@
+<!doctype html>
+<html>
+
+<head>
+    <title>Interactive Vigenere Cipher Solver</title>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <style type="text/css">
+        :root {
+            --bg-color: white;
+            --fg-color: black;
+            --select-bg: #ffc000;
+            --select-fg: black;
+            --select-index-bg: #ffff80;
+            --select-index-fg: black;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-color: #121212;
+                --fg-color: white;
+                --select-bg: #bbbb00;
+                --select-fg: black;
+                --select-index-bg: #777700;
+                --select-index-fg: black;
+            }
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--fg-color);
+        }
+
+        table,
+        th,
+        td {
+            border: 1px solid var(--fg-color);
+            border-collapse: collapse;
+            white-space: nowrap;
+        }
+
+        .section {
+            border-bottom: 1px solid var(--fg-color);
+        }
+
+        .letter {
+            font-family: monospace;
+            white-space: pre-wrap;
+            margin: 0px;
+            color: var(--unsolved-fg);
+        }
+
+        .letter.selected-index {
+            background-color: var(--select-index-bg);
+            color: var(--select-index-fg);
+        }
+
+        .letter.selected-index.selected {
+            background-color: var(--select-bg);
+            color: var(--select-fg);
+        }
+
+        .letter.fixed {
+            color: var(--fg-color);
+        }
+
+        .section-edit {
+            margin-bottom: 10px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #edit-text {
+            box-sizing: border-box;
+            width: 100%;
+        }
+    </style>
+    <script type="text/javascript">
+        "use strict";
+        class VigSolver {
+            text = "";
+            key = "";
+            alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            numBigram = 20;
+            numTrigram = 15;
+            _curIndex = null;
+            _curSelection = null;
+
+            constructor(options = {}) {
+                this.setOptions(options);
+            }
+
+            setOptions(options) {
+                if ("text" in options)
+                    this.text = options.text;
+                if ("key" in options)
+                    this.key = options.key;
+                if ("alphabet" in options)
+                    this.alphabet = options.alphabet;
+                if ("numBigram" in options)
+                    this.numBigram = options.numBigram | 0;
+                if ("numTrigram" in options)
+                    this.numTrigram = options.numTrigram | 0;
+            }
+
+            /* Save/load. */
+            static _saveData(key, data) {
+                localStorage.setItem(key, JSON.stringify(data));
+            }
+
+            static _loadData(key) {
+                try {
+                    var data = localStorage.getItem(key);
+                    if (data) {
+                        return JSON.parse(data);
+                    }
+                } catch (e) {
+                    return {};
+                }
+            }
+
+            static getSavedSettings() {
+                return {
+                    ...this._loadData('vigsolver-settings'),
+                    ...this._loadData('vigsolver-key'),
+                };
+            }
+
+            exportSettings() {
+                return {
+                    text: this.text,
+                    key: this.key,
+                    alphabet: this.alphabet,
+                    numBigram: this.numBigram,
+                    numTrigram: this.numTrigram,
+                }
+            }
+
+            _saveSettings() {
+                let settings = this.exportSettings();
+                let key = { key: settings.key };
+                delete settings.key;
+                this.constructor._saveData('vigsolver-settings', settings);
+                this.constructor._saveData('vigsolver-key', key);
+            }
+
+            _saveKey() {
+                let key = { key: this.key };
+                this.constructor._saveData('vigsolver-key', key);
+            }
+
+            _keyLength() {
+                return this.key.length || 1;
+            }
+
+            /* UI handlers */
+            _lookupLetter(c) {
+                let result = this.alphabet.indexOf(c);
+                return (result == -1) ? 0 : result;
+            }
+
+            deselect() {
+                if (this._curIndex) {
+                    $(`.${this._curIndex}`).removeClass("selected-index");
+                }
+                this._curIndex = null;
+
+                if (this._curSelection) {
+                    $(`.${this._curSelection}`).removeClass("selected");
+                }
+                this._curSelection = null;
+            }
+
+            _onLetterClick = (e) => {
+                this.deselect();
+                this._curIndex = e.target.classList[1];
+                $(`.${this._curIndex}`).addClass("selected-index");
+
+                this._curSelection = e.target.classList[2];
+                $(`.${this._curSelection}`).addClass("selected");
+            }
+
+            _decryptLetter(i, c) {
+                let ch = this._lookupLetter(c) - this._lookupLetter(this.key[i]);
+                return this.alphabet[(ch + this.alphabet.length) % this.alphabet.length];
+            }
+
+            onKeyDown = (e) => {
+                if (!this._curSelection)
+                    return;
+
+                let [_, index, letter] = this._curSelection.match(/^letter-(\d+)-(.+)$/);
+                letter = this._decodeClassName(letter);
+                index = 0 | index;
+
+                let curkeyi = this.alphabet.indexOf(this.key[index % this._keyLength()]);
+                if (curkeyi === -1) {
+                    curkeyi = 0;
+                }
+
+                let newkey = null;
+                if (e.key === 'Backspace' || e.key === 'Delete') {
+                    newkey = this.alphabet[0];
+                } else if (e.key === "ArrowUp") {
+                    newkey = this.alphabet[(curkeyi + 1) % this.alphabet.length];
+                } else if (e.key === "ArrowDown") {
+                    newkey = this.alphabet[(curkeyi - 1 + this.alphabet.length) % this.alphabet.length];
+                } else if (e.key.length === 1) {
+                    let input_ind = this.alphabet.indexOf(e.key);
+                    if (input_ind === -1)
+                        input_ind = this.alphabet.indexOf(e.key.toLowerCase());
+                    if (input_ind === -1)
+                        input_ind = this.alphabet.indexOf(e.key.toUpperCase());
+
+                    if (input_ind !== -1) {
+                        newkey = this.alphabet[(this.alphabet.indexOf(letter) - input_ind + this.alphabet.length) % this.alphabet.length];
+                    }
+                }
+
+              if (newkey !== null) {
+                  this.key = this.key.substring(0, index) + newkey + this.key.substring(index + 1);
+                  this._saveKey();
+                  $("#edit-key").val(this.key);
+                  for (var i = 0; i < this.alphabet.length; i++) {
+                      let value = this._decryptLetter(index, this.alphabet[i]);
+                      let className = this._encodeClassName(this.alphabet[i]);
+                      $(`.letter-${index}-${className}`).text(value);
+                  }
+              }
+            }
+
+            /* UI rendering */
+            _encodeClassName(letter) {
+                return letter.charCodeAt(0).toString();
+            }
+
+            _decodeClassName(className) {
+                return String.fromCharCode(parseInt(className));
+            }
+
+            _createLetterSpan(index, letter) {
+                index = index % this._keyLength();
+                let value = this._decryptLetter(index, letter);
+                let className = this._encodeClassName(letter);
+                var span = $(`<span class="letter letter-${index} letter-${index}-${className}">${value}</span>`);
+                span.bind('click', this._onLetterClick);
+                return span;
+            }
+
+            _createFixedLetterSpan(letter) {
+                if (letter === '\n') {
+                    return $(`<br />`);
+                } else {
+                    return $(`<span class="letter fixed">${letter}</span>`);
+                }
+            }
+
+            _renderNGram(text, target, n, limit) {
+                target.empty();
+                var counters = [];
+                for (var i = 0; i < this._keyLength(); i++) {
+                    counters.push({});
+                }
+                for (var i = 0; i < text.length - n + 1; i++) {
+                    let idx = i % this._keyLength();
+                    let key = text.substring(i, i + n);
+                    if (!counters[idx][key])
+                        counters[idx][key] = 0;
+                    counters[idx][key] += 1;
+                }
+
+                var table = $("<table></table>");
+                for (var i = 0; i < this._keyLength(); i++) {
+                    var ordered = Object.entries(counters[i]);
+                    ordered.sort((a, b) => (a[1] < b[1]) ? 1 : -1);
+                    var tr = $("<tr></tr>");
+                    for (var j = 0; j < Math.min(limit, ordered.length); j++) {
+                        let [ngram, count] = ordered[j];
+                        var td = $("<td></td>");
+                        for (var k = 0; k < ngram.length; k++) {
+                            td.append(this._createLetterSpan(i + k, ngram[k]));
+                        }
+                        td.append(` ${count}`);
+                        tr.append(td);
+                    }
+                    table.append(tr);
+                }
+                target.append(table);
+            }
+
+            _renderText(filter, target) {
+                target.empty();
+                var j = 0;
+                for (var i = 0; i < this.text.length; i++) {
+                    if (this.text[i].match(filter)) {
+                        target.append(this._createFixedLetterSpan(this.text[i]));
+                    } else {
+                        target.append(this._createLetterSpan(j, this.text[i]));
+                        j++;
+                    }
+                }
+            }
+
+            render() {
+                this._saveSettings();
+                var filter = new RegExp("[^" + this.alphabet.replace(/[-.*+?^${}()|[\]\\]/g, '\\$&') + "]", "g");
+                var filteredText = this.text.replace(filter, "");
+                this._renderNGram(filteredText, $("#sect-freq1"), 1, this.alphabet.length);
+                this._renderNGram(filteredText, $("#sect-freq2"), 2, this.numBigram);
+                this._renderNGram(filteredText, $("#sect-freq3"), 3, this.numTrigram);
+                this._renderText(filter, $("#text"));
+            }
+        }
+
+        $(function () {
+            var solver = new VigSolver({
+                text: 'CIPHERTEXT HERE',
+                key: '',
+                alphabet: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+                ...VigSolver.getSavedSettings()
+            });
+            document.addEventListener('keydown', solver.onKeyDown);
+            solver.render();
+            $("#saveload").click(function () {
+                var result = window.prompt("Copy this code, or edit to load settings", JSON.stringify(solver.exportSettings()));
+                if (result) {
+                    solver.setOptions(JSON.parse(result));
+                    solver.render();
+                }
+            });
+            let editableSettings = ["alphabet", "key", "numBigram", "numTrigram", "text"];
+            for (var key of editableSettings) {
+                let mkey = key;
+                $("#edit-" + key).on("input", function (e) {
+                    let options = {};
+                    options[mkey] = this.value;
+                    solver.setOptions(options);
+                    solver.render();
+                }).on("focus", function (e) {
+                    solver.deselect();
+                });
+            }
+
+            function resizeTextarea() {
+                this.style.height = "";
+                this.style.height = this.scrollHeight + "px";
+            };
+
+            $("#edit-text").on("input", resizeTextarea);
+            $("#toggle-edit").click(function () {
+                $(".section-edit").toggleClass("hidden");
+                for (var key of editableSettings) {
+                    $("#edit-" + key).val(solver[key]);
+                }
+                $("#edit-text").each(resizeTextarea);
+            });
+        });
+    </script>
+</head>
+
+<body>
+    <button id="saveload">Save/Load</button>
+    <button id="toggle-edit">Show/Hide Edit Controls</button>
+    <div class="section">
+        <h2>Mapping</h2>
+        <div class="section-edit hidden">
+            <label for="edit-alphabet">Alphabet:</label> <input type="text" id="edit-alphabet" size="40"><br />
+            <label for="edit-key">Key:</label> <input type="text" id="edit-key" size="40"><br />
+        </div>
+    </div>
+    <div class="section">
+        <h2>Letter Frequencies</h2>
+        <div class="section-content" id="sect-freq1"></div>
+    </div>
+    <div class="section">
+        <h2>Bigram Frequencies</h2>
+        <div class="section-edit hidden">
+            <label for="edit-numBigram">Number of bigrams to show:</label> <input type="number" id="edit-numBigram"
+                min="0" size="3">
+        </div>
+        <div class="section-content" id="sect-freq2"></div>
+    </div>
+    <div class="section">
+        <h2>Trigram Frequencies</h2>
+        <div class="section-edit hidden">
+            <label for="edit-numTrigram">Number of trigrams to show:</label> <input type="number" id="edit-numTrigram"
+                min="0" size="3">
+        </div>
+        <div class="section-content" id="sect-freq3"></div>
+    </div>
+    <div class="section">
+        <h2>Text</h2>
+        <div class="section-edit hidden">
+            <label for="edit-text">Ciphertext:</label><br /><textarea id="edit-text" width="100%"></textarea>
+        </div>
+        <div class="section-content" id="text"></div>
+    </div>
+</body>
+
+</html>
