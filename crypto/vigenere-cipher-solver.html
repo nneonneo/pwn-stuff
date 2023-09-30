@@ -155,11 +155,6 @@
             }
 
             /* UI handlers */
-            _lookupLetter(c) {
-                let result = this.alphabet.indexOf(c);
-                return (result == -1) ? 0 : result;
-            }
-
             deselect() {
                 if (this._curIndex) {
                     $(`.${this._curIndex}`).removeClass("selected-index");
@@ -182,8 +177,16 @@
             }
 
             _decryptLetter(i, c) {
-                let ch = this._lookupLetter(c) - this._lookupLetter(this.key[i]);
-                return this.alphabet[(ch + this.alphabet.length) % this.alphabet.length];
+                let ci = this.alphabet.indexOf(c);
+                if (ci === -1) {
+                    return c;
+                }
+
+                let ki = this.alphabet.indexOf(this.key[i]);
+                if (ki === -1) {
+                    ki = 0;
+                }
+                return this.alphabet[(ci - ki + this.alphabet.length) % this.alphabet.length];
             }
 
             onKeyDown = (e) => {
@@ -206,7 +209,7 @@
                     newkey = this.alphabet[(curkeyi + 1) % this.alphabet.length];
                 } else if (e.key === "ArrowDown") {
                     newkey = this.alphabet[(curkeyi - 1 + this.alphabet.length) % this.alphabet.length];
-                } else if (e.key.length === 1) {
+                } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
                     let input_ind = this.alphabet.indexOf(e.key);
                     if (input_ind === -1)
                         input_ind = this.alphabet.indexOf(e.key.toLowerCase());
