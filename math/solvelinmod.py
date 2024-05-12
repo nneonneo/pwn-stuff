@@ -1,10 +1,10 @@
 """
 Solve a bounded system of modular linear equations.
 
-(c) 2019-2022 Robert Xiao <nneonneo@gmail.com>
+(c) 2019-2024 Robert Xiao <nneonneo@gmail.com>
 https://robertxiao.ca
 
-Originally developed in May 2019; updated July 2022
+Originally developed in May 2019; updated May 2024
 
 Please mention this software if it helps you solve a challenge!
 """
@@ -41,7 +41,10 @@ def _process_linear_equations(equations, vars, guesses) -> List[Tuple[List[int],
             if not coeff.is_integer():
                 raise ValueError(f"relation {rel}: coefficient of {var} is not an integer")
 
-            coeffs.append(int(coeff) % m)
+            coeff = int(coeff)
+            if m:
+                coeff %= m
+            coeffs.append(coeff)
 
         # Shift variables towards their guesses to reduce the (expected) length of the solution vector
         const = expr.subs({var: guesses[var] for var in vars})
@@ -50,7 +53,9 @@ def _process_linear_equations(equations, vars, guesses) -> List[Tuple[List[int],
         if not const.is_integer():
             raise ValueError(f"relation {rel}: constant is not integer")
 
-        const = int(const) % m
+        const = int(const)
+        if m:
+            const %= m
 
         result.append((coeffs, const, m))
 
@@ -61,6 +66,7 @@ def solve_linear_mod(equations, bounds, verbose=False, use_flatter=False, **lll_
     """Solve an arbitrary system of modular linear equations over different moduli.
 
     equations: A sequence of (lhs == rhs, M) pairs, where lhs and rhs are expressions and M is the modulus.
+        M may be None to indicate that the equation is not modular.
     bounds: A dictionary of {var: B} entries, where var is a variable and B is the bounds on that variable.
         Bounds may be specified in one of three ways:
         - A single integer X: Variable is assumed to be uniformly distributed in [0, X] with an expected value of X/2.
@@ -124,7 +130,7 @@ def solve_linear_mod(equations, bounds, verbose=False, use_flatter=False, **lll_
         guesses[var] = guess
 
     var_bits = math.log2(int(prod(var_scale.values()))) + len(vars)
-    mod_bits = math.log2(int(prod(m for rel, m in equations)))
+    mod_bits = math.log2(int(prod(m for rel, m in equations if m)))
     if verbose:
         print(f"verbose: variable entropy: {var_bits:.2f} bits")
         print(f"verbose: modulus entropy: {mod_bits:.2f} bits")
@@ -133,13 +139,14 @@ def solve_linear_mod(equations, bounds, verbose=False, use_flatter=False, **lll_
     equation_coeffs = _process_linear_equations(equations, vars, guesses)
 
     is_inhom = any(const != 0 for coeffs, const, m in equation_coeffs)
+    mod_count = sum(1 for coeffs, const, m in equation_coeffs if m)
 
     NR = len(equation_coeffs)
     NV = len(vars)
     if is_inhom:
         # Add one dummy variable for the constant term.
         NV += 1
-    B = matrix(ZZ, NR + NV, NR + NV)
+    B = matrix(ZZ, mod_count + NV, NR + NV)
 
     # B format (rows are the basis for the lattice):
     # [ mods:NRxNR 0
@@ -159,24 +166,27 @@ def solve_linear_mod(equations, bounds, verbose=False, use_flatter=False, **lll_
         eqS <<= int((var_bits - mod_bits) / NR) + 1
     col_scales = []
 
+    mi = 0
     for ri, (coeffs, const, m) in enumerate(equation_coeffs):
         for vi, c in enumerate(coeffs):
-            B[NR + vi, ri] = c
+            B[mod_count + vi, ri] = c
         if is_inhom:
-            B[NR + NV - 1, ri] = const
+            B[mod_count + NV - 1, ri] = const
+        if m:
+            B[mi, ri] = m
+            mi += 1
         col_scales.append(eqS)
-        B[ri, ri] = m
 
     # Compute per-variable scale such that the variable axes are scaled roughly equally
     for vi, var in enumerate(vars):
         col_scales.append(S // var_scale[var])
         # Fill in vars block of B
-        B[NR + vi, NR + vi] = 1
+        B[mod_count + vi, NR + vi] = 1
 
     if is_inhom:
         # Const block: effectively, this is a bound of 1 on the constant term
         col_scales.append(S)
-        B[NR + NV - 1, -1] = 1
+        B[mod_count + NV - 1, -1] = 1
 
     if verbose:
         print("verbose: scaling shifts:", [math.log2(int(s)) for s in col_scales])
