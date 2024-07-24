@@ -214,6 +214,12 @@ def solve_quadratic_prime_power(a, b, c, p, k):
         return solve_quadratic_mod_pk(a, b, c, p, k)
 
 def solve_quadratic(a, b, c, factors):
+    """ Solve a quadratic equation over a factorized modulus, yielding every solution.
+
+    Equation is defined as ax^2 + bx + c == 0.
+    Factors are given as either a list of [(prime, multiplicity)] or a dictionary {prime: multiplicity}.
+    """
+
     gens = []
     if isinstance(factors, dict):
         factors = list(factors.items())
@@ -223,3 +229,23 @@ def solve_quadratic(a, b, c, factors):
 
     for solns in itertools.product(*gens):
         yield solve_crt(solns, [p**k for p,k in factors])
+
+def brute_roots_prime_power(coeffs, p, k):
+    """ Bruteforce for roots of a general polynomial mod a prime power, yielding every solution.
+
+    This costs time proportional to p * k * num_roots, i.e. it is very cheap for small p.
+
+    Coefficients are given with the constant term first, i.e. the polynomial
+    is defined as sum(x**i * coeffs[i] for i in range(len(coeffs))). """
+
+    if k == 0:
+        yield 0
+        return
+
+    pk = p ** k
+    pk1 = p ** (k - 1)
+    for root in brute_roots_prime_power(coeffs, p, k - 1):
+        for i in range(p):
+            x = i * pk1 + root
+            if sum(pow(x, i, pk) * coeffs[i] for i in range(len(coeffs))) % pk == 0:
+                yield x
